@@ -12,7 +12,7 @@ import { SIDEBAR_OPEN, SIDEBAR_RAIL, Sidebar } from "@/components/sidebar";
 import { TimelineStrip } from "@/components/timeline-strip";
 import { AgentUnavailable, ask } from "@/lib/agent";
 import { rankOf } from "@/lib/format";
-import { useEntity, useMapLevel, usePhenomenon } from "@/lib/filters";
+import { type MapLevel, useEntity, useMapLevel, usePhenomenon } from "@/lib/filters";
 import { isActive, periodLabel, usePeriod } from "@/lib/period";
 import {
   type MapDatum,
@@ -60,6 +60,8 @@ export function Dashboard() {
   // Lo elegido va atado al conjunto de territorios en que se eligió: cambiar de nivel, fenómeno,
   // entidad, capa o filtro cambia ese conjunto, y lo elegido deja de existir.
   const [picked, setPicked] = useState<{ readonly context: string; readonly selection: Selection } | null>(null);
+  // El territorio que el agente pidió resaltar, por su identificador: se resuelve contra la capa.
+  const [asked, setAsked] = useState<string | null>(null);
   // El análisis arranca cerrado: al entrar se ve el radar entero, y la píldora dice qué hay.
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(true);
@@ -74,10 +76,27 @@ export function Dashboard() {
   // La vista decide qué mide el mapa; la entidad seleccionada en cualquier componente lo reduce a
   // los documentos que la nombran.
   const context = [level, phenomenon, entity, view, filter].join("|");
-  const chosen = picked?.context === context ? picked.selection : null;
-  const setSelected = (selection: Selection | null) => setPicked(selection ? { context, selection } : null);
+  const setSelected = (selection: Selection | null) => {
+    // Elegir a mano manda sobre lo que pidió el agente.
+    setAsked(null);
+    setPicked(selection ? { context, selection } : null);
+  };
 
   const layer = useMapLayer(view, { phenomenon, level, entity, filter, period });
+
+  /**
+   * El territorio que el agente nombró se resuelve contra la capa en cuanto ésta trae sus datos,
+   * que llegan después de que sus filtros la hayan cambiado. Se deriva en vez de guardarse: así no
+   * hace falta un efecto que escriba estado, que es lo que hace que el compilador salte el
+   * componente. Si el territorio no está en esta capa, no se selecciona nada.
+   */
+  const requested = asked ? layer.data.find((datum) => datum.id === asked) : undefined;
+  const chosen =
+    picked?.context === context
+      ? picked.selection
+      : requested
+        ? { place: requested, geometry: requested.geometry as GeoJSON.Geometry }
+        : null;
 
   // Lo elegido se muestra con sus cifras de ahora, no con las del momento del clic: al mover el
   // periodo, la ficha, el puesto y el popup cambian con el mapa. Si el territorio ya no registra
@@ -156,6 +175,24 @@ export function Dashboard() {
   const rankOfPlace = (place: MapDatum | null) =>
     place && layer.data.some((datum) => datum.id === place.id) ? rankOf(place.value, values) : null;
 
+  /**
+   * Lo que el agente eligió para el mapa, aplicado al radar de fondo. El mapa es el lienzo, no una
+   * tarjeta: activarlo es moverlo, y sin esto la elección se quedaba en una etiqueta.
+   *
+   * Los valores vienen ya validados contra listas cerradas por el propio agente, así que se
+   * aplican con los setters directamente: el visualizador nunca devuelve una capa de alertas o de
+   * grupos fuera del fenómeno 3, que es lo que la regla de `onView` protege.
+   */
+  const applyMap = (filters?: Activation["filters"]) => {
+    if (!filters) return;
+    if (typeof filters.view === "string") setView(filters.view as MapView);
+    if (typeof filters.level === "string") setLevel(filters.level as MapLevel);
+    if (typeof filters.phenomenon === "number") setPhenomenon(filters.phenomenon);
+    // La selección anterior pertenecía a otro conjunto de territorios.
+    setPicked(null);
+    setAsked(typeof filters.place === "string" ? filters.place : null);
+  };
+
   const onAsk = async (question: string) => {
     setPending(true);
     try {
@@ -165,7 +202,9 @@ export function Dashboard() {
       // Lo que el agente activó reemplaza la vista: el tablero no muestra todo a la vez.
       if (chosen.length > 0) {
         setActivations(chosen);
-        setAnalysisOpen(true);
+        applyMap(chosen.find((activation) => activation.tool === "get_places")?.filters);
+        // El mapa es el lienzo: si solo lo activó a él, no hay tarjeta que abrir.
+        setAnalysisOpen(chosen.some((activation) => !OUT_OF_COLUMN.has(activation.tool)));
       }
     } catch (error) {
       const message = error instanceof AgentUnavailable ? error.message : "El agente falló.";

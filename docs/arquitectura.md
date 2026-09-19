@@ -449,6 +449,16 @@ nombre de la herramienta —`get_places`, `get_timeline`, `get_entity_matrix`…
 los filtros, así que activar una visualización cuesta cero tokens de contrato y añadir un
 componente nuevo es añadir una herramienta y su entrada en el registro del tablero.
 
+**El mapa es el lienzo, así que activarlo es moverlo**: los filtros de `get_places` cambian la capa,
+el nivel y el fenómeno del radar de fondo, y quedan en la URL como cualquier otro filtro global.
+
+**Y si la pregunta nombra un territorio, se resalta.** El agente devuelve el topónimo tal como lo
+escribe la pregunta y el código lo resuelve contra la tabla `places`, normalizando acentos y
+mayúsculas; un territorio que no existe se descarta, no se obedece. La lista **no viaja en el
+prompt**: son unos trescientos entre países y departamentos, y meterlos triplicaría el sistema de
+cada consulta visual, cuando la comprobación que importa es la del código. Resuelto, el mapa lo
+encuadra y la barra abre su evidencia, igual que un clic.
+
 ### 3.7 Disposición: el mapa como lienzo
 
 El tablero usa un **maestro-detalle** (B.6.1): el mapa ocupa la pantalla y los paneles se anclan a

@@ -17,6 +17,7 @@ que decidir los componentes no suma latencia de reloj.
 import calendar
 import logging
 import re
+import unicodedata
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -68,12 +69,13 @@ SCHEMA = {
                     "cols": _NULLABLE(FIELDS),
                     "measure": _NULLABLE(MEASURES),
                     "entity": {"type": ["string", "null"]},
+                    "place": {"type": ["string", "null"]},
                     "date_from": {"type": ["string", "null"]},
                     "date_to": {"type": ["string", "null"]},
                 },
                 "required": [
                     "tool", "phenomenon", "level", "view", "by", "cols", "measure", "entity",
-                    "date_from", "date_to",
+                    "place", "date_from", "date_to",
                 ],
                 "additionalProperties": False,
             },
@@ -102,6 +104,8 @@ Filtros de cada componente (null si no aplica):
   en ingles, aunque sea con otras palabras (drones = unmanned-aerial-vehicle, interferencia de
   GPS = jamming)—, su identificador EXACTO (lo que va antes del "="); si no, null.
   {entities}
+- place (solo get_places): el territorio que la pregunta nombra, escrito como ella lo escribe
+  ("Putumayo", "Colombia", "Amazonas"); null si no nombra ninguno. Se resalta en el mapa.
 - date_from y date_to: SOLO si la pregunta acota un periodo con palabras ("ultimos 12 meses",
   "desde 2024", "en 2025"). Si no lo acota, los dos null: no inventes un periodo. Hoy es {today}.
 
@@ -136,6 +140,7 @@ class Visualizer:
         self._model = model
         self._pool = pool
         self._entities: dict[str, str] | None = None
+        self._known_places: dict[str, tuple[str, str]] | None = None
 
     async def _known(self) -> dict[str, str]:
         """Identificador -> nombre de las entidades, leido una vez por proceso."""
@@ -145,12 +150,36 @@ class Visualizer:
             self._entities = {row["entity_id"]: row["name"] for row in rows}
         return self._entities
 
+    async def _places(self) -> dict[str, tuple[str, str]]:
+        """Nombre normalizado -> (identificador, nombre) de cada territorio del corpus.
+
+        No viaja en el prompt: son unos trescientos entre paises y departamentos, y meterlos
+        triplicaria el sistema de cada consulta visual. El modelo escribe el toponimo como lo
+        escribe la pregunta y aqui se resuelve contra la lista cerrada, que es donde de verdad
+        importa: un territorio que no existe se descarta, no se obedece.
+
+        Si la tabla no esta, se pierde el resaltado y nada mas: los componentes siguen saliendo.
+        """
+        if self._known_places is None:
+            try:
+                async with self._pool.acquire() as connection:
+                    rows = await connection.fetch("select place_id, name from places")
+            except Exception:
+                log.exception("no se pudo leer la tabla de lugares; no habra resaltado")
+                rows = []
+            self._known_places = {}
+            for row in rows:
+                self._known_places[_normalizado(row["name"])] = (row["place_id"], row["name"])
+                self._known_places[_normalizado(row["place_id"])] = (row["place_id"], row["name"])
+        return self._known_places
+
     async def plan(self, question: str) -> tuple[list[ToolRecord], list[Usage]]:
         """Los componentes que activar, como herramientas llamadas, y lo que costo decidirlo.
 
         Si el modelo falla no hay componentes, no un error: la respuesta en texto sigue valiendo.
         """
         entities = await self._known()
+        places = await self._places()
         system = SYSTEM.format(
             tools="\n".join(f"- {name}: {task}" for name, task in TOOLS.items()),
             entities="; ".join(f"{key}={name}" for key, name in entities.items()),
@@ -169,7 +198,9 @@ class Visualizer:
             return [], []
 
         raw = parse_json(text, {"components": []}).get("components") or []
-        components = [_validated(component, entities) for component in raw[:MAX_COMPONENTS]]
+        components = [
+            _validated(component, entities, places) for component in raw[:MAX_COMPONENTS]
+        ]
         components = _coherent([c for c in components if c is not None], question)
         records: list[ToolRecord] = []
         for parameters in components:
@@ -203,7 +234,10 @@ class Visualizer:
             )
             if not rows:
                 return "ningun territorio con estos filtros"
-            return "encabezan: " + ", ".join(f"{row['name']} ({row['documents']})" for row in rows)
+            leading = "encabezan: " + ", ".join(f"{row['name']} ({row['documents']})" for row in rows)
+            # El territorio resaltado va delante: es lo que la pregunta nombraba.
+            resaltado = parameters.get("place_name")
+            return f"resalta {resaltado}; {leading}" if resaltado else leading
         shown = ", ".join(f"{key}={value}" for key, value in parameters.items())
         return f"componente activado{': ' + shown if shown else ''}"
 
@@ -245,8 +279,16 @@ def _coherent(components: list[dict[str, Any]], question: str) -> list[dict[str,
     return components
 
 
-def _validated(component: Any, entities: dict[str, str]) -> dict[str, Any] | None:
-    """Solo lo que existe: herramienta conocida, valores de las listas, entidad del corpus."""
+def _normalizado(texto: str) -> str:
+    """Sin acentos, sin mayusculas y con un solo espacio: «Nariño» y «narino» son el mismo sitio."""
+    plano = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+    return " ".join(plano.lower().split())
+
+
+def _validated(
+    component: Any, entities: dict[str, str], places: dict[str, tuple[str, str]]
+) -> dict[str, Any] | None:
+    """Solo lo que existe: herramienta conocida, valores de las listas, entidad y lugar del corpus."""
     if not isinstance(component, dict) or component.get("tool") not in TOOLS:
         return None
     tool = component["tool"]
@@ -269,6 +311,12 @@ def _validated(component: Any, entities: dict[str, str]) -> dict[str, Any] | Non
         parameters["measure"] = component["measure"]
     if component.get("entity") in entities:
         parameters["entity"] = component["entity"]
+    # El territorio que la pregunta nombra, resuelto contra la lista cerrada. El nombre viaja
+    # tambien porque es lo que el redactor escribe y lo que el mapa rotula.
+    if tool == "get_places" and isinstance(component.get("place"), str):
+        found = places.get(_normalizado(component["place"]))
+        if found:
+            parameters["place"], parameters["place_name"] = found
     for key in ("date_from", "date_to"):
         value = component.get(key)
         if isinstance(value, str) and MONTH.match(value):

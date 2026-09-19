@@ -196,8 +196,11 @@ VISUALIZER = Agent(
     tools=(
         Tool(
             name="get_places",
-            descripcion="Mapa coropletico: documentos, alertas o grupos armados por territorio.",
-            input_parameters={"view": "string", "level": "string", "phenomenon": "integer", "date_from": "string", "date_to": "string"},
+            descripcion=(
+                "Mapa coropletico: documentos, alertas o grupos armados por territorio. Con "
+                "`place`, ademas encuadra y resalta el territorio que la pregunta nombra."
+            ),
+            input_parameters={"view": "string", "level": "string", "phenomenon": "integer", "place": "string", "date_from": "string", "date_to": "string"},
         ),
         Tool(
             name="get_timeline",
