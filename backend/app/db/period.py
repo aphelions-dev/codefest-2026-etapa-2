@@ -11,9 +11,15 @@ from datetime import date
 # Reglas de `document_dates.source` que dan el dia; las demas solo dan el ano.
 PRECISE = ("iso_en_nombre", "aammdd_en_nombre")
 
-# Ultimo dia que la fecha conocida del documento puede significar.
+# Primer y ultimo dia que la fecha conocida del documento puede significar. Una alerta temprana trae
+# su dia de emision en la ficha estructurada (`early_warnings.issued_on`), mas preciso que el ano de
+# su codigo: sin preferirlo, la misma alerta entraria en un periodo en la capa de alertas y no en la
+# de documentos.
+_PRECISE = ", ".join(repr(rule) for rule in PRECISE)
+_PERIOD_START = "coalesce(w.issued_on, d.published_on)"
 _PERIOD_END = (
-    f"case when d.source in ({', '.join(repr(rule) for rule in PRECISE)}) then d.published_on "
+    f"case when w.issued_on is not null then w.issued_on "
+    f"when d.source in ({_PRECISE}) then d.published_on "
     "else (date_trunc('year', d.published_on) + interval '1 year - 1 day')::date end"
 )
 
@@ -30,13 +36,14 @@ def documents(
     bounds = []
     if date_from is not None:
         args.append(date_from)
-        bounds.append(f"d.published_on >= ${len(args)}")
+        bounds.append(f"{_PERIOD_START} >= ${len(args)}")
     if date_to is not None:
         args.append(date_to)
         bounds.append(f"{_PERIOD_END} <= ${len(args)}")
     return (
-        f" and exists (select 1 from document_dates d where d.doc_id = {doc_column} "
-        f"and {' and '.join(bounds)})"
+        " and exists (select 1 from document_dates d "
+        "left join early_warnings w on w.doc_id = d.doc_id "
+        f"where d.doc_id = {doc_column} and {' and '.join(bounds)})"
     )
 
 

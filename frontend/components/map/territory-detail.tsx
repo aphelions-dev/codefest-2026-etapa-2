@@ -8,7 +8,7 @@ import { Flag } from "@/components/flag";
 import { IconButton } from "@/components/icon-button";
 import { SectionHeader, ShowMore } from "@/components/map/panel";
 import type { Territory } from "@/lib/api";
-import { PHENOMENON_STYLE } from "@/lib/filters";
+import { PHENOMENON_STYLE, useEntity } from "@/lib/filters";
 import { formatNumber } from "@/lib/format";
 import { periodParams, usePeriod } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
@@ -40,8 +40,11 @@ export function TerritoryDetail({
   readonly onBack: () => void;
 }) {
   const [period] = usePeriod();
+  // La entidad elegida en otra vista recorta también la evidencia: la del mismo recorte que la cifra.
+  const [entity] = useEntity();
   const { data, error, loading } = useApi<Territory>(`/territories/${placeId}`, {
     phenomenon: phenomenon ?? undefined,
+    entity: entity ?? undefined,
     ...periodParams(period),
     group: group ?? undefined,
     kind: kind ?? undefined,

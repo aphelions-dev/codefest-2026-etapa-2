@@ -486,6 +486,7 @@ async def territory(
     group: str | None = Query(default=None, description="Limitar los municipios a un grupo"),
     kind: str | None = Query(default=None, description="Limitar las alertas a una clase de riesgo"),
     limit: int = Query(default=12, ge=1, le=60, description="Cuantos fragmentos devolver"),
+    entity: str | None = Query(default=None, description="Solo documentos que nombran la entidad"),
     date_from: DateFrom = None,
     date_to: DateTo = None,
 ) -> Territory:
@@ -501,7 +502,7 @@ async def territory(
 
     value = phenomenon.value if phenomenon else None
     total, rows = await territory_db.fragments(
-        pool, place_id, value, limit, date_from, date_to
+        pool, place_id, value, limit, date_from, date_to, entity
     )
     towns = (
         await territory_db.municipalities(pool, place["name"], group)
@@ -509,7 +510,7 @@ async def territory(
         else []
     )
     warnings = (
-        await territory_db.alerts(pool, place_id, kind, date_from, date_to)
+        await territory_db.alerts(pool, place_id, kind, date_from, date_to, entity)
         if place["level"] == "department"
         else []
     )

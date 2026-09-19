@@ -1317,6 +1317,8 @@ export interface operations {
                 kind?: string | null;
                 /** @description Cuantos fragmentos devolver */
                 limit?: number;
+                /** @description Solo documentos que nombran la entidad */
+                entity?: string | null;
                 /** @description Primer dia del periodo (ISO 8601); sin el, desde el principio */
                 date_from?: string | null;
                 /** @description Ultimo dia del periodo (ISO 8601); sin el, hasta el final */
