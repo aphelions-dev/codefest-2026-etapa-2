@@ -430,6 +430,12 @@ puede compartir exactamente lo que está mirando y el botón de atrás funciona:
 Cada vista declara lo que un filtro **no** alcanza en vez de ignorarlo: la presencia armada no está
 fechada ni sale del corpus, y su ficha lo dice.
 
+**Compartir la vista.** Como todo el estado vive en la URL, el enlace reproduce la vista entera. El
+botón bajo el zoom lo copia, o genera una imagen: no una captura de pantalla, que arrastraría
+paneles cortados y controles, sino una tarjeta compuesta con el mapa recortado al hueco visible, el
+título y los filtros activos, la leyenda, el ranking con sus empates, el territorio elegido y un pie
+con la fuente, la fecha y el enlace. Se lee sola, fuera del tablero.
+
 ### 3.6.1 El agente generador de visualizaciones
 
 Es el tercer agente de la §1.2 y el que se evalúa en la ejecución dinámica (§3.3). Una llamada al

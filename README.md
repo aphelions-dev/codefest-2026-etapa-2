@@ -91,6 +91,13 @@ El mapa es el lienzo; la barra izquierda, la franja inferior y el analista se ap
   fuentes que leyó (las citadas aparte) y el **razonamiento**: los agentes que participaron, en
   orden, con su
   modelo, sus tokens y cada herramienta con lo que devolvió.
+- **Que el agente mueva el tablero**: una pregunta que pide ver algo —dónde, cuándo, con quién,
+  qué domina— pasa por el visualizador. El mapa cambia de capa, nivel y fenómeno, encuadra el
+  territorio que nombra la pregunta, y el diálogo se abre en los componentes elegidos, con sus
+  filtros.
+- **Compartir la vista**: el botón bajo el zoom del mapa descarga o copia una imagen de la vista
+  —el mapa con sus filtros, la leyenda, el ranking y la fuente— o copia el enlace, que reproduce
+  exactamente lo que se está mirando.
 - **Ir al chat a solas**: el botón *Chat* de la cabecera abre `frontagent.`.
 
 ### El chat de pruebas (`frontagent.`)
