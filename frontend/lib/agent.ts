@@ -77,6 +77,9 @@ export type Cost = {
 
 export class AgentUnavailable extends Error {}
 
+/** El backend no tiene ese endpoint: es anterior a él. */
+class EndpointMissing extends Error {}
+
 /**
  * A qué agente pertenece cada herramienta, según la ficha (`backend/app/agent/tools.py`). La
  * respuesta dice qué herramientas se llamaron y qué agentes participaron, pero no las empareja.
@@ -155,7 +158,15 @@ export async function askStream(
     readonly onVisualization?: (activations: readonly Activation[]) => void;
   } = {},
 ): Promise<Answer> {
-  const response = await post("/chat/stream", { input: question });
+  let response: Response;
+  try {
+    response = await post("/chat/stream", { input: question });
+  } catch (error) {
+    // Un backend anterior no tiene el endpoint en vivo: se pregunta a `/chat` y se pierde solo el
+    // progreso, no la respuesta. Cubre también el rato en que el tablero se despliega antes.
+    if (error instanceof EndpointMissing) return ask(question);
+    throw error;
+  }
   if (!response.body) throw new AgentUnavailable("El agente no devolvió el progreso de la respuesta.");
 
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -219,6 +230,7 @@ async function post(path: string, body: Record<string, unknown>): Promise<Respon
   } catch {
     throw new AgentUnavailable("No se pudo contactar con el agente. Revisa la conexión e inténtalo de nuevo.");
   }
+  if ((response.status === 404 || response.status === 405) && path !== "/chat") throw new EndpointMissing(path);
   if (response.status === 404 || response.status === 405) {
     throw new AgentUnavailable(
       "El agente todavía no está desplegado en este endpoint. El radar y los componentes siguen sobre datos reales del corpus.",
