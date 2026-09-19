@@ -22,6 +22,9 @@ import type { MapDatum, MapGuide, MapView } from "@/lib/map-layers";
 const CAMERA = {
   country: { center: [4, 22] as [number, number], zoom: 1.2 },
   department: { center: [-77.5, 4.2] as [number, number], zoom: 4.6 },
+  // La presencia armada cubre la cuenca entera, de Colombia a Bolivia: encuadrar solo Colombia
+  // dejaba fuera la mayor parte del dato.
+  amazon: { center: [-66, -6] as [number, number], zoom: 3.3 },
 };
 
 // Hasta qué zoom encuadrar el territorio elegido: un departamento pide más acercamiento que un país.
@@ -94,7 +97,7 @@ export function MapBackdrop({
       : null;
   // Los países solo tienen sentido en la vista de documentos: las otras dos son de Colombia.
   const world = view === "documentos" && level === "country";
-  const camera = world ? CAMERA.country : CAMERA.department;
+  const camera = world ? CAMERA.country : view === "grupos" ? CAMERA.amazon : CAMERA.department;
   // La presencia va de 1 a unos pocos grupos: los cortes son los propios valores, no cuantiles de
   // una distribución larga como la de los documentos.
   const steps = view === "grupos" ? [1, 2, 3, 4] : [...breaks];

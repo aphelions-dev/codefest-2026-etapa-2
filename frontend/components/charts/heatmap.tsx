@@ -62,7 +62,7 @@ export function Heatmap({
                 <th className="bg-card sticky left-0 z-10" />
                 {data.cols.map((col) => (
                   <th className="text-muted-foreground max-w-24 truncate px-1 pb-1 text-left font-normal" key={col} title={col}>
-                    {col}
+                    {col.replaceAll("_", " ")}
                   </th>
                 ))}
               </tr>

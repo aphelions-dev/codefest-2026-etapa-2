@@ -81,13 +81,23 @@ export function ChatPanel({
   readonly onAsk: (question: string) => void;
   readonly onToggle?: () => void;
 }) {
+  // Plegado, todo el riel abre el analista: no hace falta atinar al icono.
   if (collapsed) {
     return (
-      <aside className={cn(GLASS, "border-border/60 flex h-full flex-col items-center gap-2 border-l py-3")}>
-        <IconButton label="Abrir el analista" onClick={onToggle} side="left">
-          <PanelRightOpenIcon className="size-4" />
-        </IconButton>
-        <MessageSquareIcon className="text-muted-foreground size-4" />
+      <aside className={cn(GLASS, "border-border/60 h-full border-l")}>
+        <button
+          aria-label="Abrir el analista"
+          className="group hover:bg-muted/40 flex h-full w-full flex-col items-center gap-3 py-3 transition-colors"
+          onClick={onToggle}
+          title="Abrir el analista"
+          type="button"
+        >
+          <PanelRightOpenIcon className="text-muted-foreground group-hover:text-foreground size-4" />
+          <MessageSquareIcon className="text-primary size-4" />
+          <span className="text-muted-foreground group-hover:text-foreground text-[11px] [writing-mode:vertical-rl]">
+            Analista{turns.length > 0 ? ` · ${turns.length}` : ""}
+          </span>
+        </button>
       </aside>
     );
   }

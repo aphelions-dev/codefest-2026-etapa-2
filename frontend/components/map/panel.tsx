@@ -81,9 +81,11 @@ function useFittingRows(list: RefObject<HTMLUListElement | null>, count: number)
 }
 
 /** Lista ordenada de lugares con barra proporcional: las filas que quepan (10 o más) y un clic abre su detalle. */
-export function Ranking<T>({ items, name, value, id, color, onSelect, icon }: {
+export function Ranking<T>({ items, name, value, id, color, onSelect, icon, meta }: {
   items: T[]; name: (item: T) => string; value: (item: T) => number; id: (item: T) => string;
   color: string; onSelect: (item: T) => void; icon?: (item: T) => ReactNode;
+  /** Una línea de contexto bajo el nombre, cuando el nombre solo es ambiguo. */
+  meta?: (item: T) => string | undefined;
 }) {
   const [expanded, setExpanded] = useState(false);
   const list = useRef<HTMLUListElement>(null);
@@ -102,7 +104,11 @@ export function Ranking<T>({ items, name, value, id, color, onSelect, icon }: {
             >
               <div className="flex items-baseline gap-2 text-xs">
                 <span className="w-4 font-mono text-[10px] text-muted-foreground">{index + 1}</span>
-                <span className="flex flex-1 items-center gap-1.5">{icon?.(item)}{name(item)}</span>
+                <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                  {icon?.(item)}
+                  <span className="truncate">{name(item)}</span>
+                  {meta?.(item) ? <span className="truncate text-[10px] text-muted-foreground">{meta(item)}</span> : null}
+                </span>
                 <span className="font-mono text-muted-foreground">{value(item)}</span>
               </div>
               <div className="ml-6 h-1 rounded-full bg-muted">

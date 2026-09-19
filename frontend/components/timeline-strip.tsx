@@ -15,7 +15,6 @@ import {
   YAxis,
 } from "recharts";
 
-import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
 import { Slider } from "@/components/ui/slider";
 import { Tooltip as Hint, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -160,10 +159,25 @@ export function TimelineStrip({
     <section className={cn(GLASS, "border-border/60 border-t")}>
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-1.5">
+          {/* El título pliega y despliega: plegada, la franja entera es su propio mando. */}
           <h2 className="shrink-0 text-[12px] font-medium">
-            {showAlerts ? "Alertas emitidas por año" : "Documentos por año"}
+            <button
+              aria-expanded={open}
+              className="hover:text-primary flex items-center gap-1 transition-colors"
+              onClick={onToggle}
+              type="button"
+            >
+              {open ? <ChevronDownIcon className="size-3.5" /> : <ChevronUpIcon className="size-3.5" />}
+              {showAlerts ? "Alertas emitidas por año" : "Documentos por año"}
+            </button>
           </h2>
           <Coverage alerts={showAlerts ? alerts.data : null} timeline={showAlerts ? null : data} />
+          {/* La presencia armada no está fechada: la serie de abajo no es la del mapa, y se dice. */}
+          {view === "grupos" ? (
+            <span className="text-muted-foreground truncate text-[11px]" title="Amazon Underworld no fecha la presencia de cada grupo, así que no hay serie temporal de la capa del mapa. Se muestran los documentos del fenómeno 3.">
+              · la presencia armada no tiene fecha; documentos de F3
+            </span>
+          ) : null}
           {entity && focused ? (
             <span className="text-primary truncate text-[11px]">
               · {entity.replaceAll("-", " ")} en {appearances} {appearances === 1 ? "año" : "años"}
@@ -203,16 +217,6 @@ export function TimelineStrip({
             </button>
           ) : null}
           <PrecisionNote />
-          {!empty ? (
-            <IconButton
-              label={open ? "Plegar la línea de tiempo" : "Desplegar la línea de tiempo"}
-              onClick={onToggle}
-              side="top"
-              size="icon-xs"
-            >
-              {open ? <ChevronDownIcon /> : <ChevronUpIcon />}
-            </IconButton>
-          ) : null}
         </div>
       </header>
 
