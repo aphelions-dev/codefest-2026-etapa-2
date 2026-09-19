@@ -7,14 +7,12 @@ import { ChatPanel, type Turn } from "@/components/chat/panel";
 import { DocumentView } from "@/components/document-view";
 import { MapBackdrop, type Selection } from "@/components/map/backdrop";
 import { quantileBreaks } from "@/components/map/layers";
-import type { Place, PlaceFeature } from "@/components/map/place-card";
 import type { Activation } from "@/components/registry";
 import { SIDEBAR_OPEN, SIDEBAR_RAIL, Sidebar } from "@/components/sidebar";
 import { TimelineStrip } from "@/components/timeline-strip";
 import { AgentUnavailable, ask } from "@/lib/agent";
-import type { Places } from "@/lib/api";
 import { useEntity, useMapLevel, usePhenomenon } from "@/lib/filters";
-import { useApi } from "@/lib/use-api";
+import { type MapDatum, useLayerFilter, useMapLayer, useMapView } from "@/lib/map-layers";
 
 // Ancho del analista: el mapa lo usa para no encuadrar ni poner sus controles debajo del panel.
 const CHAT_RAIL = 44;
@@ -43,6 +41,8 @@ export function Dashboard() {
   const [phenomenon, setPhenomenon] = usePhenomenon();
   const [level, setLevel] = useMapLevel(phenomenon);
   const [entity, setEntity] = useEntity();
+  const [view, setView] = useMapView();
+  const [filter, setFilter] = useLayerFilter();
   const [turns, setTurns] = useState<readonly Turn[]>([]);
   const [pending, setPending] = useState(false);
   const [activations, setActivations] = useState<readonly Activation[]>(DEFAULT_VIEW);
@@ -57,15 +57,10 @@ export function Dashboard() {
   const strip = useRef<HTMLDivElement>(null);
   const [timelineSpace, setTimelineSpace] = useState(52);
 
-  const { data } = useApi<Places>("/places", {
-    level,
-    phenomenon: phenomenon ?? undefined,
-    // La entidad seleccionada en cualquier vista reduce el mapa a los documentos que la nombran.
-    entity: entity ?? undefined,
-    limit: level === "department" ? 40 : 90,
-  });
-  const features = (data?.features ?? []) as unknown as readonly PlaceFeature[];
-  const breaks = quantileBreaks(features.map((feature) => feature.properties.documents));
+  // La vista decide qué mide el mapa; la entidad seleccionada en cualquier componente lo reduce a
+  // los documentos que la nombran.
+  const layer = useMapLayer(view, { phenomenon, level, entity, filter });
+  const breaks = quantileBreaks(layer.data.map((datum) => datum.value));
 
   useEffect(() => {
     const element = strip.current;
@@ -83,7 +78,7 @@ export function Dashboard() {
   }, []);
 
   // Cambiar de nivel o de fenómeno cambia el conjunto de territorios: lo elegido deja de existir.
-  useEffect(() => setSelected(null), [level, phenomenon, entity]);
+  useEffect(() => setSelected(null), [level, phenomenon, entity, view, filter]);
 
   const chatOpen = chatChoice ?? viewport >= NARROW;
   const sidebarOpen = sidebarChoice ?? viewport >= NARROW;
@@ -93,9 +88,9 @@ export function Dashboard() {
   const timelineEntity = activations.find((activation) => activation.tool === "get_timeline")?.filters?.entity;
 
   // La API devuelve los lugares ordenados por documentos, así que el índice ya es el puesto.
-  const rankOf = (place: Place | null) => {
+  const rankOf = (place: MapDatum | null) => {
     if (!place) return null;
-    const index = features.findIndex((feature) => feature.properties.place_id === place.place_id);
+    const index = layer.data.findIndex((datum) => datum.id === place.id);
     return index < 0 ? null : index;
   };
 
@@ -128,14 +123,21 @@ export function Dashboard() {
       <MapBackdrop
         bottomInset={timelineSpace}
         breaks={breaks}
-        features={features}
+        data={layer.data}
+        filter={filter}
+        guide={layer.guide}
         leftInset={sidebarWidth}
         level={level}
+        onFilter={setFilter}
         onLevel={setLevel}
         onSelect={setSelected}
+        onView={setView}
+        options={layer.options}
+        phenomenon={phenomenon}
         rankOf={rankOf}
         rightInset={chatWidth}
         selected={selected}
+        view={view}
       />
 
       <AnalysisPanel
@@ -152,14 +154,12 @@ export function Dashboard() {
       <Sidebar
         analysisOpen={analysisOpen}
         components={columnPanels.length}
-        features={features}
+        coverage={layer.coverage}
         level={level}
         onPhenomenon={setPhenomenon}
-        onSelectPlace={(feature) =>
-          setSelected({
-            place: feature.properties,
-            geometry: feature.geometry as unknown as GeoJSON.Geometry,
-          })
+        places={layer.data}
+        onSelectPlace={(datum) =>
+          setSelected({ place: datum, geometry: datum.geometry as GeoJSON.Geometry })
         }
         onToggle={() => setSidebarChoice(!sidebarOpen)}
         onToggleAnalysis={() => setAnalysisOpen((open) => !open)}

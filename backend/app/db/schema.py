@@ -73,4 +73,17 @@ create table if not exists armed_presence (
 
 create index if not exists armed_presence_admin1 on armed_presence(admin1_code);
 create index if not exists armed_presence_country on armed_presence(country);
+
+-- Alertas tempranas de la Defensoria del Pueblo. `kind` distingue el riesgo inminente —una amenaza
+-- inmediata— del estructural, que es sostenido en el tiempo: son dos cosas y no se suman.
+create table if not exists early_warnings (
+    doc_id    text primary key,
+    code      text not null,
+    kind      text not null,
+    issued_on date,
+    chunk_id  text not null
+);
+
+create index if not exists early_warnings_kind on early_warnings(kind);
+create index if not exists early_warnings_issued on early_warnings(issued_on);
 """

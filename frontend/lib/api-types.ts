@@ -153,6 +153,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/presence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Presencia de grupos armados en la cuenca amazonica
+         * @description Que grupos armados registra cada territorio, y en que municipios.
+         *
+         *     El dato viene por municipio, pero la geometria municipal no esta en el indice: el mapa agrega
+         *     al departamento y la lista conserva el municipio, que es donde la fuente mide. Es un conteo de
+         *     presencia declarada por la fuente, no una medida de intensidad ni un nivel de riesgo.
+         */
+        get: operations["presence_presence_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Alertas tempranas de la Defensoria del Pueblo
+         * @description Donde y cuando se emitieron alertas, separando el riesgo inminente del estructural.
+         *
+         *     Una alerta de alcance nacional nombra varios departamentos y cuenta en cada uno: la cifra es
+         *     "alertas que nombran el territorio", no "alertas sobre el territorio", y la vista lo declara.
+         */
+        get: operations["alerts_alerts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chat": {
         parameters: {
             query?: never;
@@ -258,6 +305,102 @@ export interface components {
              * @default 0
              */
             total: number;
+        };
+        /**
+         * Alert
+         * @description Una alerta concreta, con su codigo y el fragmento donde consta.
+         */
+        Alert: {
+            /** Doc Id */
+            doc_id: string;
+            /** Code */
+            code: string;
+            /** Kind */
+            kind: string;
+            /** Issued On */
+            issued_on?: string | null;
+            trace: components["schemas"]["Trace"];
+        };
+        /** AlertFeature */
+        AlertFeature: {
+            /**
+             * Type
+             * @default Feature
+             */
+            type: string;
+            /** Id */
+            id: string;
+            /** Geometry */
+            geometry: {
+                [key: string]: unknown;
+            };
+            properties: components["schemas"]["AlertProperties"];
+        };
+        /**
+         * AlertProperties
+         * @description Lo que el mapa pinta de un departamento: cuantas alertas de cada clase lo nombran.
+         */
+        AlertProperties: {
+            /** Place Id */
+            place_id: string;
+            /** Name */
+            name: string;
+            /** Iso2 */
+            iso2?: string | null;
+            /** Alerts */
+            alerts: number;
+            /** Imminent */
+            imminent: number;
+            /** Structural */
+            structural: number;
+            /** Latest */
+            latest?: string | null;
+            trace: components["schemas"]["Trace"];
+        };
+        /** AlertYear */
+        AlertYear: {
+            /** Year */
+            year: number;
+            /** Alerts */
+            alerts: number;
+            /** Imminent */
+            imminent: number;
+            /** Structural */
+            structural: number;
+        };
+        /**
+         * Alerts
+         * @description Alertas tempranas de la Defensoria del Pueblo.
+         *
+         *     `imminent` y `structural` van siempre separadas: una declara una amenaza inmediata y la otra una
+         *     sostenida en el tiempo, y sumarlas daria una cifra sin significado.
+         */
+        Alerts: {
+            /** Kind */
+            kind?: string | null;
+            /** Alerts */
+            alerts: number;
+            /** Imminent */
+            imminent: number;
+            /** Structural */
+            structural: number;
+            /** Since */
+            since?: string | null;
+            /** Until */
+            until?: string | null;
+            /** Features */
+            features: components["schemas"]["AlertFeature"][];
+            /** Years */
+            years: components["schemas"]["AlertYear"][];
+            /** Recent */
+            recent: components["schemas"]["Alert"][];
+        };
+        /** ArmedGroup */
+        ArmedGroup: {
+            /** Name */
+            name: string;
+            /** Municipalities */
+            municipalities: number;
         };
         /**
          * Breakdown
@@ -543,6 +686,27 @@ export interface components {
             estado: string;
         };
         /**
+         * Municipality
+         * @description El nivel en el que la fuente da el dato, con su traza al fragmento que lo sustenta.
+         */
+        Municipality: {
+            /** Pcode */
+            pcode: string;
+            /** Country */
+            country: string;
+            /** Admin1 */
+            admin1: string;
+            /** Admin2 */
+            admin2: string;
+            /** Population */
+            population?: number | null;
+            /** Groups */
+            groups: string[];
+            /** No Info */
+            no_info: boolean;
+            trace: components["schemas"]["Trace"];
+        };
+        /**
          * Phenomenon
          * @description Los tres fenomenos del reto.
          * @enum {integer}
@@ -604,6 +768,70 @@ export interface components {
             entity?: string | null;
             /** Features */
             features: components["schemas"]["PlaceFeature"][];
+        };
+        /**
+         * Presence
+         * @description Presencia de grupos armados en la cuenca amazonica.
+         *
+         *     El mapa agrega al departamento porque es el territorio con geometria; la lista conserva el
+         *     municipio, que es donde la fuente mide. Un municipio sin grupos y con `no_info` es *sin
+         *     informacion*, no *sin presencia*, y las dos cifras van separadas por eso.
+         */
+        Presence: {
+            /** Group */
+            group?: string | null;
+            /** Country */
+            country?: string | null;
+            /** Municipalities */
+            municipalities: number;
+            /** With Presence */
+            with_presence: number;
+            /** Without Information */
+            without_information: number;
+            /** Matching */
+            matching: number;
+            /** Groups */
+            groups: components["schemas"]["ArmedGroup"][];
+            /** Features */
+            features: components["schemas"]["PresenceFeature"][];
+            /** Places */
+            places: components["schemas"]["Municipality"][];
+        };
+        /** PresenceFeature */
+        PresenceFeature: {
+            /**
+             * Type
+             * @default Feature
+             */
+            type: string;
+            /** Id */
+            id: string;
+            /** Geometry */
+            geometry: {
+                [key: string]: unknown;
+            };
+            properties: components["schemas"]["PresenceProperties"];
+        };
+        /**
+         * PresenceProperties
+         * @description Lo que el mapa pinta de un departamento: cuantos municipios suyos registran presencia.
+         */
+        PresenceProperties: {
+            /** Place Id */
+            place_id: string;
+            /** Name */
+            name: string;
+            /** Iso2 */
+            iso2?: string | null;
+            /** Municipalities */
+            municipalities: number;
+            /** With Presence */
+            with_presence: number;
+            /** Without Information */
+            without_information: number;
+            /** Groups */
+            groups: number;
+            trace: components["schemas"]["Trace"];
         };
         /**
          * Quadrant
@@ -981,6 +1209,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Quadrant"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    presence_presence_get: {
+        parameters: {
+            query?: {
+                /** @description Limitar a un grupo armado */
+                group?: string | null;
+                /** @description Limitar la lista a un pais */
+                country?: string | null;
+                /** @description Cuantos municipios listar */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Presence"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    alerts_alerts_get: {
+        parameters: {
+            query?: {
+                /** @description Inminencia o Estructural */
+                kind?: string | null;
+                /** @description Cuantas alertas recientes listar */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
                 };
             };
             /** @description Validation Error */

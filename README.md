@@ -36,7 +36,9 @@ El mapa es el lienzo y todo lo demás se apoya en sus bordes.
   filtro activo aparece arriba y se quita con un clic o con `Esc`.
 - **Verificar cualquier dato**: un clic en una celda, una arista o un territorio abre el documento
   original en el fragmento exacto que lo sustenta. En el cuadrante, doble clic.
-- **Cambiar el nivel del mapa**: *Países* / *Departamentos*, abajo a la izquierda.
+- **Cambiar lo que mide el mapa**: *Documentos*, *Alertas* o *Grupos armados*, arriba a la
+  izquierda. Cada vista tiene su filtro propio —clase de riesgo, grupo armado— y su propia ficha
+  con la fuente y sus límites. En *Documentos*, además, se alterna entre países y departamentos.
 
 ### El chat de pruebas (`frontagent.`)
 
@@ -96,6 +98,8 @@ cd backend
 uv run --env-file ../.env python -m precompute.entities         # entidades y sus menciones
 uv run --env-file ../.env python -m precompute.places           # países y departamentos
 uv run --env-file ../.env python -m precompute.document_dates   # fechas desde la metadata de la fuente
+uv run --env-file ../.env python -m precompute.armed_presence   # presencia armada por municipio
+uv run --env-file ../.env python -m precompute.early_warnings   # alertas de la Defensoría
 ```
 
 Cada uno es idempotente y dice por consola qué produjo. `document_dates` informa además de cuántos

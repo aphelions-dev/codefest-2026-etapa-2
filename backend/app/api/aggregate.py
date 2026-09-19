@@ -8,6 +8,7 @@ import json
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.db import alerts as alerts_db
 from app.db import breakdown as breakdown_db
 from app.db import entities as entities_db
 from app.db import places as places_db
@@ -25,6 +26,11 @@ from app.params import (
     PlaceLevel,
 )
 from app.responses import (
+    Alert,
+    AlertFeature,
+    AlertProperties,
+    Alerts,
+    AlertYear,
     Breakdown,
     BreakdownBucket,
     Document,
@@ -368,5 +374,66 @@ async def presence(
                 trace=Trace(doc_id=row["doc_id"], chunk_id=row["chunk_id"]),
             )
             for row in places
+        ],
+    )
+
+
+@router.get("/alerts", summary="Alertas tempranas de la Defensoria del Pueblo")
+async def alerts(
+    pool: Pool,
+    kind: str | None = Query(default=None, description="Inminencia o Estructural"),
+    limit: int = Query(default=20, ge=1, le=100, description="Cuantas alertas recientes listar"),
+) -> Alerts:
+    """Donde y cuando se emitieron alertas, separando el riesgo inminente del estructural.
+
+    Una alerta de alcance nacional nombra varios departamentos y cuenta en cada uno: la cifra es
+    "alertas que nombran el territorio", no "alertas sobre el territorio", y la vista lo declara.
+    """
+    if kind is not None and kind not in alerts_db.KINDS:
+        raise HTTPException(422, f"kind tiene que ser uno de {', '.join(alerts_db.KINDS)}")
+
+    counts = await alerts_db.coverage(pool)
+    return Alerts(
+        kind=kind,
+        alerts=counts["alerts"],
+        imminent=counts["imminent"],
+        structural=counts["structural"],
+        since=counts["since"],
+        until=counts["until"],
+        features=[
+            AlertFeature(
+                id=row["place_id"],
+                geometry=json.loads(row["geometry"]),
+                properties=AlertProperties(
+                    place_id=row["place_id"],
+                    name=row["name"],
+                    iso2=row["iso2"],
+                    alerts=row["alerts"],
+                    imminent=row["imminent"],
+                    structural=row["structural"],
+                    latest=row["latest"],
+                    trace=Trace(doc_id=row["sample_doc"], chunk_id=row["sample_chunk"]),
+                ),
+            )
+            for row in await alerts_db.by_territory(pool, kind)
+        ],
+        years=[
+            AlertYear(
+                year=row["year"],
+                alerts=row["alerts"],
+                imminent=row["imminent"],
+                structural=row["structural"],
+            )
+            for row in await alerts_db.by_year(pool, kind)
+        ],
+        recent=[
+            Alert(
+                doc_id=row["doc_id"],
+                code=row["code"],
+                kind=row["kind"],
+                issued_on=row["issued_on"],
+                trace=Trace(doc_id=row["doc_id"], chunk_id=row["chunk_id"]),
+            )
+            for row in await alerts_db.recent(pool, kind, limit)
         ],
     )

@@ -7,47 +7,9 @@ import { Flag } from "@/components/flag";
 import { DocumentLink } from "@/components/document-view";
 import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
-import { formatNumber, rankLabel } from "@/lib/format";
+import { rankLabel } from "@/lib/format";
+import type { MapDatum, MapGuide } from "@/lib/map-layers";
 import { cn } from "@/lib/utils";
-
-/** Un territorio del mapa, con su cifra, su puesto y el fragmento que lo sustenta. */
-export type Place = {
-  readonly place_id: string;
-  readonly name: string;
-  readonly iso2?: string | null;
-  readonly documents: number;
-  readonly mentions: number;
-  readonly trace: { readonly doc_id: string; readonly chunk_id: string };
-};
-
-/** Un territorio tal como lo sirve la API: sus propiedades y la geometría que se pinta. */
-export type PlaceFeature = { readonly properties: Place; readonly geometry: unknown };
-
-/** Qué mide el mapa en cada nivel: título, unidad, fuente y qué no cubre. */
-export type Guide = {
-  readonly title: string;
-  readonly measures: string;
-  readonly read: string;
-  readonly source: string;
-  readonly limits: string;
-};
-
-export const GUIDE: Record<"country" | "department", Guide> = {
-  country: {
-    title: "Países nombrados en el corpus",
-    measures: "Cuántos documentos del corpus nombran cada país.",
-    read: "Más intenso, más documentos; la mitad menos citada queda sin color.",
-    source: "Corpus de la Etapa 1 · fronteras de Natural Earth",
-    limits: "Nombrar no es actuar: un país aparece también cuando se lo analiza desde fuera.",
-  },
-  department: {
-    title: "Departamentos de Colombia nombrados en el corpus",
-    measures: "Cuántos documentos del corpus nombran cada departamento.",
-    read: "Más intenso, más documentos; la mitad menos citada queda sin color.",
-    source: "Corpus de la Etapa 1 · fronteras de Natural Earth",
-    limits: "Mide cuánto se escribe sobre el territorio, no la intensidad de lo que ocurre en él.",
-  },
-};
 
 /**
  * Qué se está viendo en el mapa. Sin territorio elegido explica la vista; con uno, resume sus
@@ -64,10 +26,10 @@ export function PlaceCard({
   onToggle,
   onClose,
 }: {
-  readonly guide: Guide;
+  readonly guide: MapGuide;
   readonly color: string;
   readonly legend: ReactNode;
-  readonly place: Place | null;
+  readonly place: MapDatum | null;
   /** Puesto del territorio elegido dentro de la lista, empezando en 0. */
   readonly rank: number | null;
   readonly total: number;
@@ -88,9 +50,7 @@ export function PlaceCard({
         {dot}
         <Flag code={place?.iso2} />
         <span className="truncate text-sm font-medium">{place?.name ?? guide.title}</span>
-        {place ? (
-          <span className="text-muted-foreground shrink-0 text-xs">{formatNumber(place.documents)} doc.</span>
-        ) : null}
+        {place ? <span className="text-muted-foreground shrink-0 text-xs">{place.headline}</span> : null}
         <IconButton label="Mostrar el foco" onClick={onToggle} size="icon-xs">
           <ChevronDownIcon />
         </IconButton>
@@ -133,9 +93,9 @@ export function PlaceCard({
       {place ? (
         <div className="space-y-0.5">
           <div className="font-mono text-base font-semibold" style={{ color }}>
-            {formatNumber(place.documents)} documentos
+            {place.headline}
           </div>
-          <div className="text-muted-foreground text-xs">{formatNumber(place.mentions)} menciones en el corpus</div>
+          <div className="text-muted-foreground text-xs">{place.detail}</div>
           {/* La cifra del mapa lleva a un fragmento real: es lo que la hace verificable. */}
           <div className="text-muted-foreground text-xs">
             Evidencia:{" "}
@@ -169,7 +129,7 @@ export function HoverCard({
   x,
   y,
 }: {
-  readonly place: Place;
+  readonly place: MapDatum;
   readonly rank: number | null;
   readonly total: number;
   readonly x: number;
@@ -191,7 +151,7 @@ export function HoverCard({
         ) : null}
       </div>
       <div className="text-muted-foreground text-[11px]">
-        {formatNumber(place.documents)} documentos · {formatNumber(place.mentions)} menciones
+        {place.headline} · {place.detail}
       </div>
       <div className="text-muted-foreground text-[10px]">Clic para fijarlo y ver su evidencia</div>
     </div>

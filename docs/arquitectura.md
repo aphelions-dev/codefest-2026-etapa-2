@@ -182,6 +182,26 @@ juntos?»), así que el mapa se acompaña de la red y del panel de evidencia.
 **Los tres comparten** el panel de evidencia y la trazabilidad, porque en los tres el valor del
 análisis depende de poder verificar la afirmación en el texto original.
 
+### 3.2.1 Las tres vistas del mapa
+
+El mapa no superpone capas: cada vista es **una pregunta distinta sobre un territorio distinto**, y
+mezclarlas produciría un color que no significa nada.
+
+| Vista | Qué cuenta | Fuente | Qué no dice |
+|---|---|---|---|
+| Documentos | Documentos del corpus que nombran el territorio | Corpus de la Etapa 1 | Nombrar no es actuar |
+| Alertas | Alertas de la Defensoría que nombran el departamento | 363 alertas, 2017–2026 | Una alerta nacional cuenta en cada departamento que nombra |
+| Grupos armados | Municipios con presencia declarada de al menos un grupo | Amazon Underworld, 1.407 municipios | Es presencia declarada, no intensidad ni riesgo |
+
+Las tres se reconstruyeron **desde el propio índice**, sin volver al corpus crudo: los documentos de
+Amazon Underworld y de Alertas Tempranas guardan sus campos estructurados dentro del texto indexado
+(`b_ADM2_PCODE`, `au_eln`, `codigo`, `tipo`, `fecha_emision`), así que el dato estaba en la base en
+forma de frase. El precómputo lo vuelve a leer de ahí.
+
+En las dos vistas nuevas las cifras **nunca se suman entre sí**: riesgo inminente y estructural son
+cosas distintas, y un municipio *sin información* no es un municipio *sin presencia*. Cada par va
+por separado en la ficha y en la leyenda.
+
 ### 3.3 El cuadrante: cómo se mide «tendencia» sin inventar nada
 
 El Anexo B.2.4 dibuja un cuadrante de *intensidad × tendencia*. La dificultad es que «tendencia» se
@@ -279,8 +299,7 @@ pantalla amontonan sus etiquetas y dejan de resolver la tarea que justifica su e
 
 | No está | Motivo |
 |---|---|
-| Nivel municipal en el mapa | Necesita el gazetteer municipal del corpus crudo, que no está en el repositorio de la Etapa 1 |
-| Capa de presencia de grupos armados (Amazon Underworld) | Los polígonos salen de las teselas PBF del corpus original; en el índice esos documentos entraron como texto |
+| Polígonos municipales | La Etapa 1 indexó las teselas de Amazon Underworld como texto, y en esa conversión se perdió la geometría. Los atributos sí sobrevivieron, así que el dato está: lo que falta es la forma con que dibujarlo. El mapa agrega al departamento y la lista conserva el municipio |
 | Grafo formal de tripletas | La Etapa 1 no construyó el grafo opcional. B.3.1 declara la red de co-ocurrencia alternativa legítima, y es la que no inventa relaciones semánticas que nadie extrajo |
 | Extracción de entidades con LLM | 1.813 documentos por inferencia se comen el presupuesto. Se extraen por diccionario y coincidencia de texto, que para nombres propios no necesita razonamiento |
 | Reranker sobre la recuperación | Medido contra el ground truth de la Etapa 1, empeoraba el resultado |

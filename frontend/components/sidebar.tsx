@@ -5,8 +5,14 @@ import { LayoutGridIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, RadarIcon } from
 import { Flag } from "@/components/flag";
 import { IconButton } from "@/components/icon-button";
 import { GLASS, Ranking, SectionHeader } from "@/components/map/panel";
-import type { Place, PlaceFeature } from "@/components/map/place-card";
-import { PHENOMENA, PHENOMENON_DOT, PHENOMENON_STYLE, type MapLevel } from "@/lib/filters";
+import {
+  type MapLevel,
+  PHENOMENA,
+  PHENOMENON_DOT,
+  PHENOMENON_STYLE,
+  phenomenonRamp,
+} from "@/lib/filters";
+import type { MapDatum } from "@/lib/map-layers";
 import { cn } from "@/lib/utils";
 
 /** Ancho de la barra abierta y de su riel cuando se pliega. */
@@ -27,7 +33,8 @@ export function Sidebar({
   onToggleAnalysis,
   components,
   level,
-  features,
+  places,
+  coverage,
   onSelectPlace,
 }: {
   readonly open: boolean;
@@ -39,8 +46,11 @@ export function Sidebar({
   /** Cuántos componentes activó el agente: el conmutador dice qué se recupera al abrirlo. */
   readonly components: number;
   readonly level: MapLevel;
-  readonly features: readonly PlaceFeature[];
-  readonly onSelectPlace: (feature: PlaceFeature) => void;
+  /** Los territorios de la vista activa del mapa, ya ordenados por su cifra. */
+  readonly places: readonly MapDatum[];
+  /** Lo que la vista declara sobre su propia cobertura, al pie del ranking. */
+  readonly coverage: string;
+  readonly onSelectPlace: (place: MapDatum) => void;
 }) {
   return (
     <aside
@@ -102,22 +112,26 @@ export function Sidebar({
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3" data-ranking-scroll>
             {/* El ranking va suelto en la barra, sin tarjeta: ya está dentro de un panel con su
                 borde, y una caja dentro de otra solo añade ruido. */}
-            {features.length > 0 ? (
+            {places.length > 0 ? (
               <div className="space-y-2">
                 <SectionHeader
-                  aside={`${features.length}`}
-                  info="Documentos distintos del corpus que nombran cada territorio, del más citado al menos. Tocar uno lo fija en el mapa y abre su ficha con la evidencia."
-                  title={level === "department" ? "Departamentos" : "Países"}
+                  aside={`${places.length}`}
+                  info="Los territorios de la vista activa del mapa, del que más registra al que menos. Tocar uno lo fija en el mapa y abre su ficha con la evidencia."
+                  title={level === "department" ? "Departamentos" : "Territorios"}
                 />
-                <Ranking<PlaceFeature>
-                  color="#3fc0d4"
-                  icon={(feature) => <Flag code={feature.properties.iso2} />}
-                  id={(feature) => feature.properties.place_id}
-                  items={[...features]}
-                  name={(feature) => feature.properties.name}
+                <Ranking<MapDatum>
+                  color={phenomenonRamp(phenomenon)[2]}
+                  icon={(place) => <Flag code={place.iso2} />}
+                  id={(place) => place.id}
+                  items={[...places]}
+                  name={(place) => place.name}
                   onSelect={onSelectPlace}
-                  value={(feature) => feature.properties.documents}
+                  value={(place) => place.value}
                 />
+                {/* La vista declara su cobertura aquí: qué parte del dato está y qué parte falta. */}
+                {coverage ? (
+                  <p className="text-muted-foreground px-1.5 text-[10px] leading-snug">{coverage}</p>
+                ) : null}
               </div>
             ) : null}
           </div>

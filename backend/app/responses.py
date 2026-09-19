@@ -1,4 +1,5 @@
 import json
+from datetime import date
 
 """Modelos de respuesta. Son la unica fuente del contrato: los tipos del frontend se generan de
 aqui por OpenAPI, asi que nada se escribe a mano dos veces."""
@@ -225,6 +226,61 @@ class Presence(BaseModel):
     groups: list[ArmedGroup]
     features: list[PresenceFeature]
     places: list[Municipality]
+
+
+class AlertProperties(BaseModel):
+    """Lo que el mapa pinta de un departamento: cuantas alertas de cada clase lo nombran."""
+
+    place_id: str
+    name: str
+    iso2: str | None = None
+    alerts: int
+    imminent: int
+    structural: int
+    latest: date | None = None
+    trace: Trace
+
+
+class AlertFeature(BaseModel):
+    type: str = "Feature"
+    id: str
+    geometry: dict
+    properties: AlertProperties
+
+
+class AlertYear(BaseModel):
+    year: int
+    alerts: int
+    imminent: int
+    structural: int
+
+
+class Alert(BaseModel):
+    """Una alerta concreta, con su codigo y el fragmento donde consta."""
+
+    doc_id: str
+    code: str
+    kind: str
+    issued_on: date | None = None
+    trace: Trace
+
+
+class Alerts(BaseModel):
+    """Alertas tempranas de la Defensoria del Pueblo.
+
+    `imminent` y `structural` van siempre separadas: una declara una amenaza inmediata y la otra una
+    sostenida en el tiempo, y sumarlas daria una cifra sin significado.
+    """
+
+    kind: str | None = None
+    alerts: int
+    imminent: int
+    structural: int
+    since: date | None = None
+    until: date | None = None
+    features: list[AlertFeature]
+    years: list[AlertYear]
+    recent: list[Alert]
 
 
 class TimelinePoint(BaseModel):
