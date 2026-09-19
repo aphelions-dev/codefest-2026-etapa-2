@@ -16,8 +16,44 @@ backend/     FastAPI: API de agregación, orquestador y agentes especializados
   app/       endpoints, agentes, herramientas y recuperación
   precompute/ procesos que derivan entidades, lugares y fechas del índice
 frontend/    Next.js + MapLibre + Recharts: tablero de componentes y chat
-docs/        documento de arquitectura y la especificación del reto
+docs/        documento de arquitectura y propuesta de visualización por fenómeno
 ```
+
+---
+
+## Para evaluar
+
+Equipo **Aphelion**.
+
+> **Endpoint del equipo:** `POST https://agent.aphelion.codefest2026.augusta.avaldigitallabs.com/chat`
+
+Los tres servicios están desplegados en Coolify y son públicos:
+
+| Qué | URL | Reto |
+|---|---|---|
+| Endpoint del agente | `POST https://agent.aphelion.codefest2026.augusta.avaldigitallabs.com/chat` | Reto 1 |
+| Chat para probarlo a mano | <https://frontagent.aphelion.codefest2026.augusta.avaldigitallabs.com> | Reto 1 |
+| Tablero | <https://dashboard.aphelion.codefest2026.augusta.avaldigitallabs.com> | Reto 2 |
+
+**El endpoint** recibe la pregunta en `input` y responde el JSON de la §2.4 (`respuesta`,
+`evaluacion`, `metadata`):
+
+```bash
+curl -X POST https://agent.aphelion.codefest2026.augusta.avaldigitallabs.com/chat \
+  -H "Content-Type: application/json" \
+  -d '{"input": "¿Qué grupos armados operan en el Putumayo?"}'
+```
+
+- **Ficha del sistema multiagente** (§2.3): [`agent_card.json`](agent_card.json). Su `endpoint` es
+  el de la tabla.
+- **Salud**: `GET https://agent.aphelion.codefest2026.augusta.avaldigitallabs.com/health` responde
+  `{"status": "ok", "database": "ok", "agent": "ok"}`.
+- **API de agregación** que consumen el tablero y sus componentes, documentada en
+  `https://agent.aphelion.codefest2026.augusta.avaldigitallabs.com/docs` (OpenAPI).
+
+**Documentos:** diseño del sistema y propuesta de visualización por fenómeno en
+[`docs/arquitectura.md`](docs/arquitectura.md); fuentes de datos y licencias en
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 ---
 
