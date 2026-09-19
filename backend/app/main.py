@@ -6,6 +6,7 @@ import asyncpg
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api import aggregate
 from app.config import settings
 
 
@@ -36,6 +37,9 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
+
+
+app.include_router(aggregate.router)
 
 
 @app.get("/health")
