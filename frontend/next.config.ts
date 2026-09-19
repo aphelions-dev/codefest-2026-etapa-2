@@ -14,6 +14,10 @@ if (surface !== "dashboard" && surface !== "chat") {
 }
 
 const nextConfig: NextConfig = {
+  // Next bloquea por defecto los recursos de desarrollo pedidos desde un host que considera de
+  // otro origen. Abriendo el tablero en 127.0.0.1 en vez de localhost, eso tumba la carga del
+  // chunk del mapa sin mostrar ningun error en pantalla.
+  allowedDevOrigins: ["127.0.0.1"],
   // Imagen minima: server.js con solo las dependencias que el trazado encuentra.
   output: "standalone",
   // El indicador de desarrollo tapa la esquina donde van los controles del mapa.
