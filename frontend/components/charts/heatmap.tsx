@@ -1,6 +1,7 @@
 "use client";
 
 import { Panel, PanelState } from "@/components/charts/panel";
+import { useDocument } from "@/lib/use-document";
 import type { Matrix } from "@/lib/api";
 import { useApi } from "@/lib/use-api";
 
@@ -23,6 +24,7 @@ export function Heatmap({ cols, phenomenon }: { readonly cols: string; readonly 
     phenomenon: phenomenon ?? undefined,
   });
 
+  const { open } = useDocument();
   const max = data ? Math.max(...data.cells.map((cell) => cell.documents), 1) : 1;
   const cellAt = (row: string, col: string) => data?.cells.find((c) => c.row === row && c.col === col);
 
@@ -30,7 +32,7 @@ export function Heatmap({ cols, phenomenon }: { readonly cols: string; readonly 
     <Panel
       source={data ? `${data.rows.length} entidades por ${data.cols.length} fuentes` : undefined}
       title="Entidades por fuente"
-      unit="Color: documentos que nombran la entidad en esa fuente"
+      unit="Color: documentos que nombran la entidad en esa fuente. Toca una celda para abrir su documento."
     >
       {!data || data.cells.length === 0 ? (
         <PanelState empty="Sin menciones para este filtro" error={error} loading={loading} />
@@ -63,13 +65,17 @@ export function Heatmap({ cols, phenomenon }: { readonly cols: string; readonly 
                       ? `${row} en ${col}: ${documents} documentos, ${cell.mentions} menciones (${cell.trace.doc_id})`
                       : `${row} en ${col}: sin menciones`;
                     return (
-                      <td
-                        className="h-6 rounded-[3px] text-center align-middle"
-                        key={col}
-                        style={{ background: shade(documents, max) }}
-                        title={label}
-                      >
-                        <span className="sr-only">{label}</span>
+                      <td className="p-0" key={col}>
+                        <button
+                          className="h-6 w-full rounded-[3px] align-middle disabled:cursor-default"
+                          disabled={!cell}
+                          onClick={() => cell && open(cell.trace.doc_id)}
+                          style={{ background: shade(documents, max) }}
+                          title={cell ? `${label} · abrir el documento` : label}
+                          type="button"
+                        >
+                          <span className="sr-only">{label}</span>
+                        </button>
                       </td>
                     );
                   })}

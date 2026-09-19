@@ -6,7 +6,6 @@ import { Bars } from "@/components/charts/bars";
 import { Evidence } from "@/components/charts/evidence";
 import { Graph } from "@/components/charts/graph";
 import { Heatmap } from "@/components/charts/heatmap";
-import { Timeline } from "@/components/charts/timeline";
 
 /**
  * Registro de componentes. El componente se deduce del **nombre de la herramienta** que el agente
@@ -60,7 +59,8 @@ export function render(activation: Activation, context: Context): ReactNode {
       // El mapa es el lienzo, no un panel: activarlo mueve el radar de fondo, no abre una tarjeta.
       return null;
     case "get_timeline":
-      return <Timeline entity={filters.entity as string | undefined} phenomenon={phenomenon} />;
+      // La serie temporal es la franja inferior, no una tarjeta: necesita anchura para leerse.
+      return null;
     case "get_document":
     case "search_corpus":
       return <Evidence docId={(filters.doc_id as string | undefined) ?? null} />;

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Panel, PanelState } from "@/components/charts/panel";
 import type { Graph as GraphData } from "@/lib/api";
 import { useApi } from "@/lib/use-api";
+import { useDocument } from "@/lib/use-document";
 
 const TYPE_COLOR: Record<string, string> = {
   organization: "var(--f2)",
@@ -32,6 +33,7 @@ export function Graph({ phenomenon }: { readonly phenomenon: number | null }) {
     min_documents: 4,
   });
   const [focus, setFocus] = useState<string | null>(null);
+  const { open } = useDocument();
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 560, height: 320 });
 
@@ -80,7 +82,7 @@ export function Graph({ phenomenon }: { readonly phenomenon: number | null }) {
     <Panel
       source={
         data
-          ? `${nodes.length} entidades y ${edges.length} relaciones. Toca una entidad para ver solo sus vecinas.`
+          ? `${nodes.length} entidades y ${edges.length} relaciones. Toca una entidad para ver sus vecinas, o una arista para abrir el documento que la sustenta.`
           : undefined
       }
       title="Entidades que aparecen juntas"
@@ -98,7 +100,9 @@ export function Graph({ phenomenon }: { readonly phenomenon: number | null }) {
               const dimmed = neighbours !== null && edge.source !== focus && edge.target !== focus;
               return (
                 <line
+                  className="cursor-pointer"
                   key={`${edge.source}-${edge.target}`}
+                  onClick={() => open(edge.sample_doc)}
                   opacity={dimmed ? 0.05 : 0.28}
                   stroke="var(--muted-foreground)"
                   strokeWidth={0.6 + (edge.documents / heaviest) * 3}
@@ -106,7 +110,9 @@ export function Graph({ phenomenon }: { readonly phenomenon: number | null }) {
                   x2={b.x}
                   y1={a.y}
                   y2={b.y}
-                />
+                >
+                  <title>{`${edge.documents} documentos compartidos · abrir uno`}</title>
+                </line>
               );
             })}
             {nodes.map((node) => {

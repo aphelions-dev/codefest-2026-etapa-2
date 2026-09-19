@@ -25,7 +25,16 @@ type Properties = { place_id: string; name: string; documents: number; mentions:
  * El mapa es el lienzo del radar: ocupa la pantalla y el resto de los componentes flotan encima.
  * Es un coroplético porque la tarea que resuelve es comparar intensidades entre territorios.
  */
-export function MapBackdrop({ phenomenon, rightInset }: { readonly phenomenon: number | null; readonly rightInset: number }) {
+export function MapBackdrop({
+  phenomenon,
+  rightInset,
+  timelineSpace,
+}: {
+  readonly phenomenon: number | null;
+  readonly rightInset: number;
+  /** Alto que ocupa la franja temporal: la leyenda se apoya justo encima. */
+  readonly timelineSpace: number;
+}) {
   const [level, setLevel] = useMapLevel(phenomenon);
   const { data } = useApi<Places>("/places", {
     level,
@@ -60,8 +69,8 @@ export function MapBackdrop({ phenomenon, rightInset }: { readonly phenomenon: n
 
       {/* Conmutador de nivel y leyenda: el zoom cambia la agregación territorial, como pide el anexo. */}
       <div
-        className={cn(GLASS, "border-border/60 absolute bottom-3 z-10 space-y-2 rounded-xl border p-3")}
-        style={{ maxWidth: 236, right: rightInset + 12 }}
+        className={cn(GLASS, "border-border/60 absolute z-10 space-y-2 rounded-xl border p-3")}
+        style={{ maxWidth: 236, right: rightInset + 12, bottom: timelineSpace }}
       >
         <div className="flex gap-1" role="group" aria-label="Nivel territorial">
           {(["country", "department"] as const).map((option) => (
@@ -89,7 +98,10 @@ export function MapBackdrop({ phenomenon, rightInset }: { readonly phenomenon: n
         </p>
       </div>
 
-      <p className="text-muted-foreground absolute bottom-1 left-1/2 z-10 -translate-x-1/2 text-[9px]">
+      <p
+        className="text-muted-foreground absolute left-1/2 z-10 -translate-x-1/2 text-[9px]"
+        style={{ bottom: timelineSpace - 16 }}
+      >
         Teselas de OpenFreeMap · datos de OpenStreetMap
       </p>
     </div>
