@@ -13,7 +13,7 @@ from app.agent.graph import Runtime, build
 from app.agent.llm import Client
 from app.agent.retrieval import Retriever
 from app.agent.visualizer import Visualizer
-from app.api import aggregate, chat
+from app.api import aggregate, chat, stream
 from app.config import settings
 from app.db.schema import SCHEMA
 from app.logging import configure
@@ -94,6 +94,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 
 app.include_router(aggregate.router)
 app.include_router(chat.router)
+app.include_router(stream.router)
 
 
 @app.get("/health")
