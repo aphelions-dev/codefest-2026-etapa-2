@@ -88,7 +88,8 @@ El mapa es el lienzo; la barra izquierda, la franja inferior y el analista se ap
   una barra o un territorio abren el documento en el fragmento exacto; los nodos de la red y los
   puntos del cuadrante, con doble clic.
 - **Preguntar**: en el analista, a la derecha. Cada respuesta enseña sus citas enlazadas, las
-  fuentes que leyó (las citadas aparte) y el **razonamiento**: los cinco agentes en orden, con su
+  fuentes que leyó (las citadas aparte) y el **razonamiento**: los agentes que participaron, en
+  orden, con su
   modelo, sus tokens y cada herramienta con lo que devolvió.
 - **Ir al chat a solas**: el botón *Chat* de la cabecera abre `frontagent.`.
 

@@ -67,17 +67,18 @@ ORCHESTRATOR = Agent(
     id="orchestrator",
     nombre="Orquestador principal",
     descripcion=(
-        "Recibe la consulta saneada, decide si se responde con el corpus o si basta una respuesta "
-        "directa, descompone preguntas compuestas en formulaciones de busqueda y reformula cuando "
-        "el verificador rechaza una respuesta."
+        "Recibe la consulta saneada y enruta: decide si la responde el analista del corpus, el "
+        "generador de visualizaciones o los dos. En la misma llamada descompone preguntas "
+        "compuestas en formulaciones de busqueda y clasifica el fenomeno, y reformula cuando el "
+        "verificador rechaza una respuesta."
     ),
     tier="deep",
     tools=(
         Tool(
             name="route_intent",
             descripcion=(
-                "Decide el destino de la consulta: recuperacion sobre el corpus o respuesta directa "
-                "cuando la pregunta es ajena a los tres fenomenos."
+                "Decide el destino de la consulta: el analista del corpus (text), el generador de "
+                "visualizaciones (visualization) o los dos en paralelo (both)."
             ),
             input_parameters={"query": "string"},
         ),
@@ -183,8 +184,9 @@ VISUALIZER = Agent(
     descripcion=(
         "Decide, a partir de la pregunta, que componentes del tablero la responden y con que "
         "filtros: fenomeno, nivel territorial, capa del mapa, entidad y periodo. No elige los "
-        "datos, que resuelven los endpoints de agregacion con su traza a doc_id y chunk_id. Corre "
-        "en paralelo al analista en POST /chat/stream, que es lo que usa el tablero."
+        "datos, que resuelven los endpoints de agregacion con su traza a doc_id y chunk_id. El "
+        "orquestador lo activa cuando la pregunta se responde mejor con un grafico que con un "
+        "parrafo, y en paralelo al analista RAG cuando se responde con las dos cosas."
     ),
     tier="fast",
     ejemplos_de_activacion=(

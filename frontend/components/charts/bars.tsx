@@ -5,7 +5,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { Panel, PanelState } from "@/components/charts/panel";
 import type { Breakdown } from "@/lib/api";
 import { phenomenonColor } from "@/lib/filters";
-import { type Period, periodParams, usePeriod } from "@/lib/period";
+import { periodParams, usePeriod } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
 import { useDocument } from "@/lib/use-document";
 
@@ -17,18 +17,8 @@ const FIELD_LABEL: Record<string, string> = {
 };
 
 /** Comparacion y composicion sobre la metadata. Barras porque la tarea es comparar cantidades. */
-export function Bars({
-  by,
-  phenomenon,
-  period: own,
-}: {
-  readonly by: string;
-  readonly phenomenon: number | null;
-  /** El periodo que declaró el agente; sin él, el filtro global de la URL. */
-  readonly period?: Period;
-}) {
-  const [global] = usePeriod();
-  const period = own ?? global;
+export function Bars({ by, phenomenon }: { readonly by: string; readonly phenomenon: number | null }) {
+  const [period] = usePeriod();
   const { open } = useDocument();
   const { data, error, loading } = useApi<Breakdown>("/metadata/breakdown", {
     by,

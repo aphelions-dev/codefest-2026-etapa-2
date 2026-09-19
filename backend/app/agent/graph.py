@@ -1,9 +1,22 @@
-"""El grafo: cinco agentes y el ciclo de reintento.
+"""El grafo: seis agentes, el enrutado del orquestador y el ciclo de reintento.
 
-    input_guardrail -> orchestrator -> retrieve -> write -> verify -> output_guardrail -> fin
-           |                |             |          |         |
-           v                v             v          v         v
-          fin              fin           fin        fin     rewrite --> retrieve
+                                  ,--> visualize --.
+    input_guardrail -> orchestrator                 >-> write -> verify -> output_guardrail -> fin
+           |                |     `--> retrieve ---'     |         |
+           v                v             |              v         v
+          fin              fin           fin            fin     rewrite --> retrieve
+
+El orquestador decide a que subagente va la consulta, y lo decide en la misma llamada con la que
+descompone la pregunta: enrutar no cuesta ninguna llamada de mas.
+
+- `text`: solo `retrieve`. Es la ruta de siempre y gasta exactamente lo mismo que antes.
+- `visualization`: solo `visualize`, y el redactor describe los componentes. Sin corpus no hay
+  citas que verificar, asi que se salta el verificador.
+- `both`: las dos ramas en paralelo, y reconvergen en el redactor. Decidir los componentes no suma
+  latencia de reloj.
+
+Una ruta visual que no produce ningun componente cae a `retrieve` y responde con el corpus,
+diciendolo.
 
 Los cuatro caminos que acaban en `fin` sin pasar por el guardian de salida entregan un texto que
 escribimos nosotros —entrada bloqueada, saludo, sin evidencia, fallo del servicio—, y no hay nada
@@ -28,6 +41,7 @@ from app.agent import guardrails, prompts, verifier
 from app.agent.llm import Client, ModelError, parse_json
 from app.agent.retrieval import Retriever
 from app.agent.state import State, ToolRecord
+from app.agent.visualizer import Visualizer
 from app.config import Settings
 
 log = logging.getLogger("agent.graph")
@@ -40,13 +54,22 @@ SMALL_TALK = re.compile(
     re.IGNORECASE,
 )
 
+# A donde enruta el orquestador. La decision viaja en el mismo JSON que las formulaciones de
+# busqueda, asi que enrutar no cuesta ninguna llamada de mas: la ruta de texto gasta hoy lo mismo
+# que antes de que existiera el visualizador.
+TEXT = "text"
+VISUALIZATION = "visualization"
+BOTH = "both"
+ROUTES = (TEXT, VISUALIZATION, BOTH)
+
 DECOMPOSE_SCHEMA = {
     "type": "object",
     "properties": {
         "queries": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 3},
         "phenomenon": {"type": ["integer", "null"], "enum": [1, 2, 3, None]},
+        "route": {"type": "string", "enum": list(ROUTES)},
     },
-    "required": ["queries", "phenomenon"],
+    "required": ["queries", "phenomenon", "route"],
     "additionalProperties": False,
 }
 
@@ -68,6 +91,7 @@ class Runtime:
 
     client: Client
     retriever: Retriever
+    visualizer: Visualizer
     settings: Settings
 
 
@@ -97,17 +121,15 @@ def build(runtime: Runtime):
         }
 
     async def orchestrator(state: State) -> State:
-        """Enruta y, si hay que buscar, prepara las formulaciones.
+        """Enruta la consulta y, si hay que buscar, prepara las formulaciones.
 
-        El enrutado se decide con una regla, no con el modelo, y el defecto es buscar. Medido
-        sobre las 50 consultas del reto: preguntarselo al modelo grande costaba una llamada en
-        cada consulta y mandaba dos fuera de alcance —amenazas ciberneticas sobre sistemas de IA,
-        y crimen organizado frente a las instituciones—, que son relevancia cero garantizada.
-        Enumerar temas siempre deja fuera el siguiente.
+        Lo primero que decide es una regla, no el modelo: si es un saludo, no hay nada que buscar.
+        Enumerar *temas* con el modelo si era un error medido sobre las 50 consultas del reto —
+        costaba una llamada en cada consulta y mandaba dos fuera de alcance—, y ademas era
+        redundante: el filtro de fuera-de-alcance que funciona es el umbral de evidencia, no este.
 
-        Y ademas era redundante: el filtro de fuera-de-alcance que funciona no es este, es el
-        umbral de evidencia. Una consulta ajena al corpus se queda en 0,404 de similitud y no
-        pasa de 0,52, asi que acaba en `sin_evidencia` sin que nadie tenga que adivinar el tema.
+        Lo que si decide el modelo es a que subagente va la consulta, y lo decide **en la misma
+        llamada** que descompone la pregunta: enrutar no cuesta ni un token adicional.
         """
         question = state["sanitized"]
         saludo = bool(SMALL_TALK.match(question.strip()))
@@ -115,7 +137,8 @@ def build(runtime: Runtime):
             ToolRecord(
                 name="route_intent",
                 input_parameters={"query": question},
-                output="small_talk" if saludo else "corpus",
+                # La ruta real la rellena `_decompose`; un saludo no llega a preguntarla.
+                output="small_talk" if saludo else TEXT,
             )
         ]
         if saludo:
@@ -135,8 +158,10 @@ def build(runtime: Runtime):
             log.exception("la descomposicion fallo; se busca con la pregunta tal cual")
             return _to_corpus(question, usage, tools)
 
-        plan = parse_json(text, {"queries": [question], "phenomenon": None})
+        plan = parse_json(text, {"queries": [question], "phenomenon": None, "route": TEXT})
         queries = [q for q in plan.get("queries") or [] if isinstance(q, str) and q.strip()]
+        # Una ruta que no reconocemos es texto: el defecto nunca gasta el visualizador por error.
+        route = plan.get("route") if plan.get("route") in ROUTES else TEXT
         tools.append(
             ToolRecord(
                 name="decompose_query",
@@ -144,18 +169,24 @@ def build(runtime: Runtime):
                 output=" | ".join(queries) or question,
             )
         )
+        # `route_intent` declara la ruta que de verdad se tomo, que es lo que el enrutador decide.
+        if tools and tools[0].name == "route_intent":
+            tools[0].output = route
         return {
             "queries": queries or [question],
             "phenomenon": plan.get("phenomenon"),
+            "route": route,
             "usage": [*usage, decompose_usage],
             "tools": tools,
             "agents": ["orchestrator"],
         }
 
     def _to_corpus(question, usage, tools) -> State:
+        """Sin el modelo no hay enrutado: se busca en el corpus, que es lo que ya hacia."""
         return {
             "queries": [question],
             "phenomenon": None,
+            "route": TEXT,
             "usage": usage,
             "tools": tools,
             "agents": ["orchestrator"],
@@ -218,18 +249,60 @@ def build(runtime: Runtime):
         )
         return {"fragments": kept, "tools": tools, "agents": ["rag_analyst"]}
 
+    async def visualize(state: State) -> State:
+        """El agente de visualizaciones. Elige que componentes del tablero abre la pregunta.
+
+        Lo que devuelve son herramientas llamadas, asi que viaja en `tools_called` sin ningun campo
+        adicional: el tablero deduce de ahi que componente activar y con que filtros.
+        """
+        try:
+            records, usage = await runtime.visualizer.plan(state["sanitized"])
+        except Exception:
+            # Degradar, no tumbar: una visualizacion que no sale no puede llevarse por delante la
+            # respuesta. Sin componentes se responde con el corpus, y el redactor lo dira.
+            log.exception("el visualizador fallo; se responde sin componentes")
+            return {"components": [], "agents": ["visualizer"]}
+        log.info("visualizacion", extra={"componentes": [record.name for record in records]})
+        return {
+            "components": records,
+            "usage": usage,
+            "tools": records,
+            "agents": ["visualizer"],
+        }
+
     async def write(state: State) -> State:
-        """El redactor. Sin herramientas y con la evidencia delimitada como datos."""
+        """El redactor. Sin herramientas y con lo que se le da delimitado como datos.
+
+        Es el mismo nodo para las dos rutas, y de ahi salen las dos unicas diferencias: con
+        evidencia del corpus redacta citando, y sin ella describe los componentes que el
+        visualizador acaba de elegir. Exigirle una cita cuando no se consulto el corpus solo
+        conseguiria que se inventara un identificador.
+        """
+        if state.get("status") == INTERNAL_ERROR:
+            # La recuperacion se cayo: ya hay respuesta y no hay nada que redactar.
+            return {}
+
         fragments = state.get("fragments") or []
-        if not fragments:
-            return {"answer": prompts.NO_EVIDENCE, "status": NO_EVIDENCE}
+        components = state.get("components") or []
+        # Se pidio una visualizacion y no salio ninguna: se responde igual, y se dice.
+        note = prompts.NO_VISUALIZATION if state.get("route", TEXT) != TEXT and not components else ""
+
+        if not fragments and not components:
+            return {"answer": prompts.NO_EVIDENCE + note, "status": NO_EVIDENCE}
+
+        if fragments:
+            system = prompts.WRITER
+            evidence = prompts.evidence_block(fragments)
+        else:
+            system = prompts.VISUAL_WRITER
+            evidence = prompts.components_block(components)
 
         try:
             text, usage = await runtime.client.complete(
                 agent="rag_analyst",
                 model=deep,
-                system=prompts.WRITER,
-                user=f"{prompts.evidence_block(fragments)}\n\n<pregunta>\n{state['sanitized']}\n</pregunta>",
+                system=system,
+                user=f"{evidence}\n\n<pregunta>\n{state['sanitized']}\n</pregunta>",
             )
         except ModelError:
             # El corpus si tenia evidencia: lo que falto fue el modelo. Confundirlo con
@@ -238,7 +311,7 @@ def build(runtime: Runtime):
             log.exception("el redactor no respondio")
             return {"answer": prompts.FAILED, "status": INTERNAL_ERROR}
 
-        return {"answer": text, "status": OK, "usage": [usage], "agents": ["rag_analyst"]}
+        return {"answer": text + note, "status": OK, "usage": [usage], "agents": ["rag_analyst"]}
 
     async def verify(state: State) -> State:
         ok, reason, usage, tools = await verifier.verify(
@@ -281,9 +354,28 @@ def build(runtime: Runtime):
     def after_input(state: State) -> str:
         return END if state.get("status") == BLOCKED_INPUT else "orchestrator"
 
-    def after_orchestrator(state: State) -> str:
-        # Saludo o pregunta ajena: ya hay respuesta y no hay nada que verificar.
-        return END if state.get("answer") else "retrieve"
+    def after_orchestrator(state: State) -> str | list[str]:
+        """El enrutado: a que subagente o subagentes va la consulta."""
+        # Saludo: ya hay respuesta y no hay nada que buscar ni que dibujar.
+        if state.get("answer"):
+            return END
+        route = state.get("route", TEXT)
+        if route == VISUALIZATION:
+            return ["visualize"]
+        # Las dos ramas a la vez: el visualizador decide mientras el analista busca y redacta, asi
+        # que elegir los componentes no suma latencia de reloj.
+        if route == BOTH:
+            return ["visualize", "retrieve"]
+        return ["retrieve"]
+
+    def after_visualize(state: State) -> str:
+        # En la ruta de las dos cosas, `retrieve` corre en paralelo y las dos reconvergen en el
+        # redactor. En la ruta visual a secas, sin componentes no hay nada que describir: se cae a
+        # buscar en el corpus, y el redactor lo dira.
+        if state.get("components") or state.get("route") == BOTH:
+            return "write"
+        log.info("la ruta visual no produjo componentes; se responde con el corpus")
+        return "retrieve"
 
     def after_retrieve(state: State) -> str:
         # Si la recuperacion se cayo no hay evidencia con la que redactar: se entrega el fallo.
@@ -292,7 +384,14 @@ def build(runtime: Runtime):
     def after_write(state: State) -> str:
         # Sin evidencia, o con el redactor caido, no hay nada contra lo que verificar ni nada
         # escrito por un modelo que pueda ser toxico: las dos respuestas las escribimos nosotros.
-        return END if state.get("status") in (NO_EVIDENCE, INTERNAL_ERROR) else "verify"
+        if state.get("status") in (NO_EVIDENCE, INTERNAL_ERROR):
+            return END
+        # El verificador compara la respuesta contra los fragmentos recuperados. En la ruta visual
+        # no hay ninguno, asi que su comprobacion de citas queda inerte y su llamada se gastaria en
+        # nada; el guardian de salida si corre, porque el texto lo escribio un modelo.
+        if not state.get("fragments"):
+            return "output_guardrail"
+        return "verify"
 
     def after_verify(state: State) -> str:
         if not state.get("rejection"):
@@ -306,6 +405,7 @@ def build(runtime: Runtime):
     graph = StateGraph(State)
     graph.add_node("input_guardrail", input_guardrail)
     graph.add_node("orchestrator", orchestrator)
+    graph.add_node("visualize", visualize)
     graph.add_node("retrieve", retrieve)
     graph.add_node("write", write)
     graph.add_node("verify", verify)
@@ -314,9 +414,10 @@ def build(runtime: Runtime):
 
     graph.add_edge(START, "input_guardrail")
     graph.add_conditional_edges("input_guardrail", after_input, ["orchestrator", END])
-    graph.add_conditional_edges("orchestrator", after_orchestrator, ["retrieve", END])
+    graph.add_conditional_edges("orchestrator", after_orchestrator, ["visualize", "retrieve", END])
+    graph.add_conditional_edges("visualize", after_visualize, ["write", "retrieve"])
     graph.add_conditional_edges("retrieve", after_retrieve, ["write", END])
-    graph.add_conditional_edges("write", after_write, ["verify", END])
+    graph.add_conditional_edges("write", after_write, ["verify", "output_guardrail", END])
     graph.add_conditional_edges("verify", after_verify, ["rewrite", "output_guardrail"])
     graph.add_edge("rewrite", "retrieve")
     graph.add_edge("output_guardrail", END)

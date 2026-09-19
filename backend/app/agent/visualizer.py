@@ -9,8 +9,9 @@ Una llamada al modelo barato con salida estructurada, y todo lo que devuelve se 
 contra listas cerradas: una herramienta, un campo o una entidad que no existen se descartan, no se
 obedecen. La pregunta viaja delimitada y declarada como datos, como en el resto de agentes.
 
-Corre en paralelo al grafo de respuesta y solo en `POST /chat/stream`, que es lo que usa el
-tablero: el `POST /chat` que evalua el Reto 1 no paga ni un token por el.
+Es un nodo mas del grafo, y **solo corre cuando el orquestador lo enruta**: una pregunta cualitativa
+no paga ni un token por el. Cuando la ruta pide las dos cosas corre en paralelo con el analista, asi
+que decidir los componentes no suma latencia de reloj.
 """
 
 import calendar

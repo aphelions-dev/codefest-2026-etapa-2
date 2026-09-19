@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Panel, PanelState } from "@/components/charts/panel";
 import type { Graph as GraphData } from "@/lib/api";
-import { type Period, periodParams, usePeriod } from "@/lib/period";
+import { periodParams, usePeriod } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
 import { useDocument } from "@/lib/use-document";
 
@@ -56,19 +56,12 @@ export function Graph({
   phenomenon,
   entity,
   onEntity,
-  period: own,
-  initial = SHOWN,
 }: {
   readonly phenomenon: number | null;
   readonly entity: string | null;
   readonly onEntity: (entityId: string | null) => void;
-  /** El periodo que declaró el agente; sin él, el filtro global de la URL. */
-  readonly period?: Period;
-  /** Cuántos nodos se dibujan de entrada: en la respuesta del chat caben menos. */
-  readonly initial?: number;
 }) {
-  const [global] = usePeriod();
-  const period = own ?? global;
+  const [period] = usePeriod();
   const { data, error, loading } = useApi<GraphData>("/entities/cooccurrence", {
     phenomenon: phenomenon ?? undefined,
     ...periodParams(period),
@@ -83,7 +76,7 @@ export function Graph({
   // Tipos ocultos y cuántos nodos se muestran: el anexo pide poder reducir el grafo a un
   // subconjunto relevante y expandirlo poco a poco, en vez de renderizarlo entero de golpe.
   const [hidden, setHidden] = useState<readonly string[]>([]);
-  const [shown, setShown] = useState(initial);
+  const [shown, setShown] = useState(SHOWN);
 
   useEffect(() => {
     const element = box.current;
@@ -185,7 +178,7 @@ export function Graph({
             ) : shown > SHOWN ? (
               <button
                 className="text-muted-foreground hover:text-foreground ml-auto rounded-md px-1.5 py-0.5 text-[10px]"
-                onClick={() => setShown(initial)}
+                onClick={() => setShown(SHOWN)}
                 type="button"
               >
                 Ver menos

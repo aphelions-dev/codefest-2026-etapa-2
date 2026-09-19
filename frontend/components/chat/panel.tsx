@@ -13,14 +13,13 @@ import {
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion } from "@/components/ai-elements/suggestion";
-import { AgentLive, AgentStatus, AgentTrace, AnswerSources } from "@/components/agent-trace";
-import { AnswerCharts } from "@/components/chat/answer-charts";
+import { AgentPending, AgentStatus, AgentTrace, AnswerSources } from "@/components/agent-trace";
 import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
 import { type Activation, TOOLS } from "@/components/registry";
 import { DocumentLink } from "@/components/document-view";
 import { SurfaceLink } from "@/components/surface-link";
-import { type AgentRun, type Cost, linkCitations, parseCitation, type Progress, type Source } from "@/lib/agent";
+import { type AgentRun, type Cost, linkCitations, parseCitation, type Source } from "@/lib/agent";
 import { cn } from "@/lib/utils";
 import type { ComponentProps } from "react";
 
@@ -80,10 +79,6 @@ export function ChatPanel({
   onToggle,
   subtitle = "Pregunta y el radar se reorganiza",
   standalone = false,
-  live = [],
-  visualized = null,
-  asking = null,
-  onOpenComponent,
 }: {
   readonly turns: readonly Turn[];
   readonly pending: boolean;
@@ -94,14 +89,6 @@ export function ChatPanel({
   readonly subtitle?: string;
   /** A solas no hay tablero: los componentes que activó la respuesta no se enseñan. */
   readonly standalone?: boolean;
-  /** Los agentes que ya terminaron en la pregunta en curso, en vivo. */
-  readonly live?: readonly Progress[];
-  /** Cuántos componentes eligió ya el visualizador en la pregunta en curso. */
-  readonly visualized?: number | null;
-  /** La pregunta que se está respondiendo: se ve en el hilo desde que se envía. */
-  readonly asking?: string | null;
-  /** En el tablero, abrir un componente de la respuesta en el diálogo grande. */
-  readonly onOpenComponent?: (tool: Activation["tool"]) => void;
 }) {
   // Plegado, todo el riel abre el analista: no hace falta atinar al icono.
   if (collapsed) {
@@ -147,7 +134,7 @@ export function ChatPanel({
             <div className="space-y-3">
               <p className="text-muted-foreground text-[12px] leading-relaxed">
                 Pregunta sobre IA y capacidades estratégicas, seguridad del entorno espacial o dinámicas
-                territoriales. Cinco agentes revisan, buscan, redactan y verifican, y cada afirmación va con el
+                territoriales. Seis agentes revisan, enrutan, buscan, visualizan, redactan y verifican, y cada afirmación va con el
                 documento que la sustenta.
               </p>
               {/* Columna y no la fila con scroll de ai-elements: en un panel estrecho, esa fila se sale por la derecha. */}
@@ -167,23 +154,11 @@ export function ChatPanel({
             </div>
           ) : (
             turns.map((turn, index) => (
-              <TurnView
-                key={index}
-                onAsk={onAsk}
-                onOpenComponent={onOpenComponent}
-                pending={pending}
-                standalone={standalone}
-                turn={turn}
-              />
+              <TurnView key={index} onAsk={onAsk} pending={pending} standalone={standalone} turn={turn} />
             ))
           )}
-          {/* Mientras trabajan: cada agente se marca en cuanto el backend dice que terminó. */}
-          {pending && asking ? (
-            <Message from="user">
-              <MessageContent className="text-[13px]">{asking}</MessageContent>
-            </Message>
-          ) : null}
-          {pending ? <AgentLive steps={live} visualized={visualized} /> : null}
+          {/* Mientras trabajan: la cadena de agentes que va a recorrer la pregunta. */}
+          {pending ? <AgentPending /> : null}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
@@ -216,15 +191,12 @@ function TurnView({
   pending,
   standalone,
   onAsk,
-  onOpenComponent,
 }: {
   readonly turn: Turn;
   readonly pending: boolean;
   readonly standalone: boolean;
   readonly onAsk: (question: string) => void;
-  readonly onOpenComponent?: (tool: Activation["tool"]) => void;
 }) {
-  const charts = turn.activations.filter((activation) => activation.byAgent);
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     await navigator.clipboard.writeText(turn.answer ?? "");
@@ -252,13 +224,11 @@ function TurnView({
       </Message>
 
       {turn.status ? <AgentStatus status={turn.status} /> : null}
-      {/* Lo que eligió el visualizador, dibujado aquí mismo: la respuesta también es gráfica. */}
-      {charts.length > 0 ? <AnswerCharts activations={charts} onOpen={standalone ? undefined : onOpenComponent} /> : null}
       {turn.sources ? <AnswerSources sources={turn.sources} /> : null}
       {turn.agents && turn.cost ? <AgentTrace agents={turn.agents} cost={turn.cost} /> : null}
 
       <div className="flex flex-wrap items-center gap-1">
-        {!standalone && charts.length === 0 && turn.activations.length > 0 ? (
+        {!standalone && turn.activations.length > 0 ? (
           <ul aria-label="Componentes que activó" className="text-muted-foreground flex flex-wrap gap-1 text-[10px]">
             {turn.activations.map((activation) => {
               const Icon = TOOLS[activation.tool].icon;

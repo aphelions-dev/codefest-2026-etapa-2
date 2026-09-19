@@ -45,9 +45,14 @@ class State(TypedDict, total=False):
     # La pregunta despues del guardian de entrada. Nunca se reescribe la original.
     sanitized: str
     phenomenon: int | None
+    # A quien enruto el orquestador: "text", "visualization" o "both".
+    route: str
     # Formulaciones con las que se busca. El orquestador puede descomponer una pregunta compuesta.
     queries: list[str]
     fragments: list[Fragment]
+    # Los componentes que eligio el visualizador. Viajan tambien en `tools` para el contrato; aqui
+    # se conservan aparte porque el redactor de la ruta visual necesita leerlos.
+    components: list[ToolRecord]
     answer: str
     status: str
     # Por que el verificador rechazo la ultima respuesta. Alimenta la reescritura, nunca la salida.

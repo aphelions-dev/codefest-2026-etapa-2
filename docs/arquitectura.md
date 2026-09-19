@@ -53,9 +53,9 @@ Separarlos habría significado mantener dos veces la misma agregación y arriesg
 
 ## 2. Reto 1 — el sistema multiagente
 
-Cinco agentes en un grafo de LangGraph. Tres son el mínimo que pide la especificación; los dos de
-más son de seguridad, y la seguridad vale el 20% de la nota del Reto 1, de la cual el 75% se mide
-atacando el endpoint desplegado.
+Seis agentes en un grafo de LangGraph. Tres son el mínimo que pide la especificación —orquestador,
+analista del corpus y generador de visualizaciones—; los otros dos son de seguridad, y la seguridad
+vale el 20% de la nota del Reto 1, de la cual el 75% se mide atacando el endpoint desplegado.
 
 ```
         ┌──────────────────┐
@@ -63,12 +63,15 @@ atacando el endpoint desplegado.
         └────────┬─────────┘
                  ▼
         ┌──────────────────┐
-        │   orchestrator   │ ── saludo / fuera de alcance ──▶ fin
+        │   orchestrator   │ ── saludo ──▶ fin
         └────────┬─────────┘
-                 ▼
-        ┌──────────────────┐
-        │     retrieve     │  search_corpus + extract_fragments
-        └────────┬─────────┘
+       ┌─────────┴──────────┐   el enrutador decide quién responde
+       ▼                    ▼
+┌──────────────┐   ┌──────────────────┐
+│  visualize   │   │     retrieve     │  search_corpus + extract_fragments
+│ get_places…  │   └────────┬─────────┘
+└──────┬───────┘            │
+       └─────────┬──────────┘
                  ▼
         ┌──────────────────┐
         │      write       │ ── sin evidencia ──▶ fin
@@ -77,7 +80,8 @@ atacando el endpoint desplegado.
         ┌──────────────────┐
         │      verify      │ ── rechazo ──▶ rewrite ──▶ retrieve
         └────────┬─────────┘                (tope: 2 vueltas)
-                 ▼
+                 │          (la ruta visual no pasa por aquí: sin
+                 ▼           corpus no hay citas que auditar)
         ┌──────────────────┐
         │ output_guardrail │
         └────────┬─────────┘
@@ -88,10 +92,37 @@ atacando el endpoint desplegado.
 | Agente | Modelo | Qué hace | Por qué separado |
 |---|---|---|---|
 | `input_guardrail` | barato | Clasifica el mensaje antes de que entre al grafo | Corta el ataque directo antes de gastar el modelo grande |
-| `orchestrator` | grande | Enruta y descompone la pregunta en formulaciones de búsqueda | Decidir la ruta mal cuesta toda la consulta |
+| `orchestrator` | grande | Enruta a los subagentes y descompone la pregunta en formulaciones de búsqueda | Decidir la ruta mal cuesta toda la consulta |
 | `rag_analyst` | grande | Recupera y redacta con la evidencia | Es el razonamiento real del sistema |
+| `visualizer` | barato | Elige los componentes del tablero que responden la pregunta, y con qué filtros | Elegir qué mirar no es redactar, y así solo lo paga quien lo necesita |
 | `verifier` | barato | Fidelidad, trazabilidad e inyección indirecta | Auditar es más fácil que redactar |
 | `output_guardrail` | barato | Toxicidad y rastros de inyección | Última barrera sobre el texto ya escrito |
+
+### 2.0 El enrutado: quién responde cada pregunta
+
+El orquestador clasifica la consulta en una de tres rutas, y lo hace **en la misma llamada** con la
+que descompone la pregunta y detecta el fenómeno: un campo más en el JSON que ya pedía. Enrutar no
+cuesta ninguna llamada adicional, que es lo que permite que **la ruta de texto gaste exactamente lo
+mismo que antes de que el visualizador existiera** — importa, porque la eficiencia es el 20% de la
+nota y se normaliza contra los demás equipos.
+
+| Ruta | Quién corre | Cuándo |
+|---|---|---|
+| `text` | solo `rag_analyst` | Explicación, doctrina, causas, contexto |
+| `visualization` | solo `visualizer` | Una cifra repartida en el espacio, en el tiempo o entre categorías |
+| `both` | los dos, **en paralelo** | Una explicación que se apoya en cómo se reparte un conteo |
+
+Tres decisiones que lo sostienen:
+
+- **En `both` las dos ramas corren a la vez** y reconvergen en el redactor, así que elegir los
+  componentes no suma latencia de reloj.
+- **La ruta visual se salta el verificador.** Compara la respuesta contra los fragmentos
+  recuperados, y ahí no hay ninguno: su comprobación de citas quedaría inerte y su llamada se
+  gastaría en nada. El guardián de salida sí corre, porque el texto lo escribió un modelo.
+- **Ante un fallo, la ruta por defecto es `text`.** Si el modelo no responde o devuelve una ruta
+  que no reconocemos, se busca en el corpus, que es lo que el sistema ya hacía. Y si la ruta visual
+  no produce ningún componente válido, se responde igual con el corpus y **se dice en la respuesta**
+  que no se pudo preparar la visualización.
 
 ### 2.1 El redactor no tiene herramientas
 
@@ -408,15 +439,15 @@ mismos endpoints de agregación que pintan el tablero, con su traza. Todo lo que
 en código contra listas cerradas: una herramienta, un campo o una entidad que no existen se
 descartan. La pregunta viaja delimitada y declarada como datos, como en el resto de agentes.
 
-Corre **en paralelo** al analista y solo en `POST /chat/stream`, que es lo que usan el tablero y el
-chat: decide mientras el analista busca y redacta, así que no suma latencia, y el `POST /chat` que
-evalúa el Reto 1 no paga ni un token por él. `/chat/stream` emite por SSE cada agente en cuanto
-termina —el chat enseña el razonamiento en vivo— y termina con la respuesta completa, con el mismo
-contrato de la §2.4.
+Es un nodo más del grafo del Reto 1 y **solo corre cuando el orquestador lo enruta** (§2.0): una
+pregunta cualitativa no paga ni un token por él, y una que pide las dos cosas lo corre en paralelo
+con el analista, así que decidir los componentes no suma latencia de reloj. No hay un segundo
+endpoint ni un segundo camino: el mismo `POST /chat` de la §2.4 sirve al evaluador y al tablero.
 
-Lo que elige se aplica **antes que el texto**: el mapa cambia de capa, nivel, fenómeno y periodo,
-el diálogo se abre en los componentes elegidos, y la respuesta del chat los dibuja como gráficas
-interactivas dentro de ella.
+**Lo que elige viaja en `tools_called`, sin ningún campo adicional.** El componente se deduce del
+nombre de la herramienta —`get_places`, `get_timeline`, `get_entity_matrix`…— y sus parámetros son
+los filtros, así que activar una visualización cuesta cero tokens de contrato y añadir un
+componente nuevo es añadir una herramienta y su entrada en el registro del tablero.
 
 ### 3.7 Disposición: el mapa como lienzo
 

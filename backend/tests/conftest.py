@@ -9,7 +9,7 @@ import json
 import pytest
 
 from app.agent.retrieval import Fragment
-from app.agent.state import Usage
+from app.agent.state import ToolRecord, Usage
 from app.config import Settings
 
 
@@ -41,6 +41,28 @@ class FakeRetriever:
         return list(self._fragments)
 
 
+class FakeVisualizer:
+    """Devuelve los componentes preparados y anota cuantas veces se le pidio planificar."""
+
+    def __init__(self, components: list[ToolRecord] | None = None):
+        self._components = components or []
+        self.questions: list[str] = []
+
+    async def plan(self, question: str):
+        self.questions.append(question)
+        if not self._components:
+            return [], []
+        return list(self._components), [Usage(agent="visualizer", model="fast-test", input=10, output=5)]
+
+
+def component(name: str = "get_places", **filters) -> ToolRecord:
+    return ToolRecord(
+        name=name,
+        input_parameters=filters or {"level": "department", "phenomenon": 3},
+        output="encabezan: Putumayo (12), Narino (9)",
+    )
+
+
 def fragment(doc_id: str, text: str, similarity: float = 0.8) -> Fragment:
     return Fragment(
         # El formato real del corpus: el chunk_id es el doc_id mas su posicion.
@@ -67,12 +89,9 @@ def settings() -> Settings:
     )
 
 
-def route(value: str) -> str:
-    return json.dumps({"route": value})
-
-
-def decompose(queries: list[str], phenomenon=None) -> str:
-    return json.dumps({"queries": queries, "phenomenon": phenomenon})
+def decompose(queries: list[str], phenomenon=None, route: str = "text") -> str:
+    """Lo que devuelve el orquestador: las formulaciones, el fenomeno y a quien enruta."""
+    return json.dumps({"queries": queries, "phenomenon": phenomenon, "route": route})
 
 
 def attack(is_attack: bool, reason: str = "") -> str:

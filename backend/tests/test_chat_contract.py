@@ -20,7 +20,9 @@ from app.responses import ChatResponse
 from tests.conftest import (
     FakeClient,
     FakeRetriever,
+    FakeVisualizer,
     attack,
+    component,
     decompose,
     fragment,
     safe,
@@ -31,8 +33,13 @@ QUESTION = "Que desafios plantea la IA en las operaciones espaciales?"
 EVIDENCE = [fragment("F2-CSIS-100", "La opacidad de los modelos limita la confianza operativa.")]
 
 
-async def run(client, retriever, settings, question=QUESTION) -> ChatResponse:
-    runtime = Runtime(client=client, retriever=retriever, settings=settings)
+async def run(client, retriever, settings, question=QUESTION, visualizer=None) -> ChatResponse:
+    runtime = Runtime(
+        client=client,
+        retriever=retriever,
+        visualizer=visualizer or FakeVisualizer(),
+        settings=settings,
+    )
     graph = build(runtime)
     state = await graph.ainvoke(
         {"question": question, "retries": 0, "usage": [], "tools": [], "agents": []}
