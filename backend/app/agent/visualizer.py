@@ -97,11 +97,26 @@ Filtros de cada componente (null si no aplica):
 - by (solo get_metadata_breakdown) y cols (solo get_entity_matrix): observatory, language, format
   o phenomenon.
 - measure (solo get_distribution): "fragments" (longitud) o "entities".
-- entity: el identificador EXACTO de una entidad de esta lista, si la pregunta la nombra; si no, null.
+- entity: si la pregunta nombra un concepto, actor, tecnologia o lugar de esta lista —en espanol o
+  en ingles, aunque sea con otras palabras (drones = unmanned-aerial-vehicle, interferencia de
+  GPS = jamming)—, su identificador EXACTO (lo que va antes del "="); si no, null.
   {entities}
-- date_from y date_to: "AAAA-MM" si la pregunta acota un periodo. Hoy es {today}: "ultimos 10
-  meses" termina en el mes actual.
+- date_from y date_to: SOLO si la pregunta acota un periodo con palabras ("ultimos 12 meses",
+  "desde 2024", "en 2025"). Si no lo acota, los dos null: no inventes un periodo. Hoy es {today}.
 
+Reglas de eleccion:
+- "que X domina/predomina en cada Y" o cruzar dos categorias -> get_entity_matrix.
+- "con quien aparece", "relaciones", "actores juntos" -> get_cooccurrence, con entity si la nombra.
+- "donde", "que departamentos/paises/territorios" -> get_places.
+- "evolucion", "por ano", "tendencia", "reaparece" -> get_timeline.
+- "emergente", "prioridad", "que merece atencion" -> get_quadrant.
+- Si la pregunta gira en torno a una entidad de la lista (drones, jamming, Starlink, un grupo
+  armado...), pon su entity en TODOS los componentes que elijas y prefiere los que la muestran:
+  get_cooccurrence (con quien aparece), get_timeline (cuando reaparece) y get_places (donde).
+- view "grupos" solo si pregunta que grupos armados hay en que municipios; una pregunta sobre lo
+  que hacen los grupos (drones, extorsion, mineria) es view "documentos" con su entity.
+- get_distribution solo si pregunta por longitud o reparto de los documentos.
+- get_metadata_breakdown solo si pregunta cuantos documentos por fuente, idioma o formato.
 No elijas un mapa ni una red si la pregunta es una simple comparacion: el tipo de grafico tiene que
 corresponder a la tarea. Responde solo con el JSON."""
 
@@ -137,7 +152,7 @@ class Visualizer:
         entities = await self._known()
         system = SYSTEM.format(
             tools="\n".join(f"- {name}: {task}" for name, task in TOOLS.items()),
-            entities=", ".join(entities),
+            entities="; ".join(f"{key}={name}" for key, name in entities.items()),
             today=datetime.now(UTC).strftime("%Y-%m"),
         )
         try:
@@ -153,10 +168,11 @@ class Visualizer:
             return [], []
 
         raw = parse_json(text, {"components": []}).get("components") or []
+        components = [_validated(component, entities) for component in raw[:MAX_COMPONENTS]]
+        components = _coherent([c for c in components if c is not None], question)
         records: list[ToolRecord] = []
-        for component in raw[:MAX_COMPONENTS]:
-            parameters = _validated(component, entities)
-            if parameters is None or any(record.name == parameters["tool"] for record in records):
+        for parameters in components:
+            if any(record.name == parameters["tool"] for record in records):
                 continue
             tool = parameters.pop("tool")
             records.append(
@@ -189,6 +205,43 @@ class Visualizer:
             return "encabezan: " + ", ".join(f"{row['name']} ({row['documents']})" for row in rows)
         shown = ", ".join(f"{key}={value}" for key, value in parameters.items())
         return f"componente activado{': ' + shown if shown else ''}"
+
+
+# "ultimos 12 meses", "ultimo ano", "en 2025": el periodo relativo se lee de la pregunta en codigo.
+# El modelo pequeno a veces lo omite, y un periodo pedido y no aplicado es un dato distinto al pedido.
+RECENT = re.compile(r"[uú]ltim[oa]s?\s+(\d+)\s+mes", re.IGNORECASE)
+LAST_YEAR = re.compile(r"[uú]ltimo\s+a[nñ]o", re.IGNORECASE)
+IN_YEAR = re.compile(r"\ben\s+(20\d\d)\b", re.IGNORECASE)
+
+
+def _period(question: str) -> tuple[str, str] | None:
+    now = datetime.now(UTC)
+    current = now.year * 12 + now.month - 1
+    months = RECENT.search(question)
+    span = int(months.group(1)) if months else (12 if LAST_YEAR.search(question) else None)
+    if span:
+        start = current - span + 1
+        return f"{start // 12}-{start % 12 + 1:02d}", f"{now.year}-{now.month:02d}"
+    year = IN_YEAR.search(question)
+    return (f"{year.group(1)}-01", f"{year.group(1)}-12") if year else None
+
+
+def _coherent(components: list[dict[str, Any]], question: str) -> list[dict[str, Any]]:
+    """Lo que el modelo pequeno deja a medias, completado con reglas que no dependen de el.
+
+    - Si la pregunta gira en torno a una entidad, el mapa la filtra y cuenta documentos: la capa de
+      presencia armada no sale del corpus y no puede filtrarse por ella.
+    - Un periodo relativo que la pregunta pide se aplica a todos los componentes que lo aceptan.
+    """
+    entity = next((c["entity"] for c in components if c.get("entity")), None)
+    period = _period(question)
+    for component in components:
+        if entity and component["tool"] == "get_places" and component.get("view") == "grupos":
+            component["view"] = "documentos"
+            component["entity"] = entity
+        if period and component["tool"] != "get_quadrant" and not component.get("date_from"):
+            component["date_from"], component["date_to"] = period
+    return components
 
 
 def _validated(component: Any, entities: dict[str, str]) -> dict[str, Any] | None:
