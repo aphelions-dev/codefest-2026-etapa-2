@@ -9,16 +9,17 @@ import { MapGeoJSON, useMap } from "@/components/ui/map";
 export type Shapes<P> = GeoJSON.FeatureCollection<GeoJSON.Geometry, P>;
 
 /**
- * Cortes por cuantiles (p50, p75, p90, p97). Con una escala continua casi todo sale coloreado y
- * Estados Unidos aplana el resto; asi la mitad menos citada queda sin color y resalta lo que
- * concentra, que es la tarea del mapa.
+ * Cortes por cuantiles: desde el minimo, p50, p80 y p95. Con una escala continua Estados Unidos
+ * aplana el resto; con cuantiles lo que concentra resalta. Todo territorio con al menos un documento
+ * lleva color: dejar sin relleno la mitad menos citada la hacia indistinguible de la que ningun
+ * documento nombra, y eso es afirmar una ausencia que no existe.
  */
 export function quantileBreaks(values: number[]): number[] {
   const sorted = values.filter((value) => value > 0).sort((a, b) => a - b);
   if (sorted.length === 0) return [];
   const quantile = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
   const cuts: number[] = [];
-  for (const q of [0.5, 0.75, 0.9, 0.97]) cuts.push(Math.max(quantile(q), (cuts.at(-1) ?? 0) + 1));
+  for (const q of [0, 0.5, 0.8, 0.95]) cuts.push(Math.max(quantile(q), (cuts.at(-1) ?? 0) + 1));
   return cuts;
 }
 

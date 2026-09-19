@@ -24,7 +24,7 @@ async def fragments(
     date_from: date | None = None,
     date_to: date | None = None,
     entity_id: str | None = None,
-) -> tuple[int, list[asyncpg.Record]]:
+) -> tuple[int, int, list[asyncpg.Record]]:
     """Los fragmentos que nombran el territorio, del que mas lo menciona al que menos.
 
     Con `entity_id`, solo los de documentos que ademas nombran la entidad: el mismo recorte que el
@@ -44,8 +44,11 @@ async def fragments(
     where = " and ".join(conditions) + period.documents("m.doc_id", date_from, date_to, args)
 
     async with pool.acquire() as connection:
-        total = await connection.fetchval(
-            f"select count(*)::int from place_mentions m where {where}", *args
+        # Fragmentos y documentos: la ficha del mapa cuenta documentos, y el detalle da las dos
+        # cifras para que no parezca que discrepan.
+        total, documents = await connection.fetchrow(
+            f"select count(*)::int, count(distinct m.doc_id)::int from place_mentions m where {where}",
+            *args,
         )
         rows = await connection.fetch(
             f"""
@@ -65,7 +68,7 @@ async def fragments(
             """,
             *args,
         )
-    return total, rows
+    return total, documents, rows
 
 
 async def municipalities(pool: asyncpg.Pool, place_name: str, group: str | None) -> list[asyncpg.Record]:

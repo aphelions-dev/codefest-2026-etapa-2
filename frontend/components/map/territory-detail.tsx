@@ -5,11 +5,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { DocumentLink } from "@/components/document-view";
 import { Flag } from "@/components/flag";
+import { chunkLabel, Highlight } from "@/components/highlight";
 import { IconButton } from "@/components/icon-button";
 import { SectionHeader, ShowMore } from "@/components/map/panel";
 import type { Territory } from "@/lib/api";
 import { PHENOMENON_STYLE, useEntity } from "@/lib/filters";
-import { formatNumber } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import { periodParams, usePeriod } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
 import { cn } from "@/lib/utils";
@@ -74,7 +75,7 @@ export function TerritoryDetail({
         <>
           <section className="space-y-2">
             <SectionHeader
-              aside={`${formatNumber(data.total_fragments)} fragmentos`}
+              aside={`${formatNumber(data.total_documents)} docs · ${formatNumber(data.total_fragments)} fragm.`}
               info="Fragmentos de cualquier fuente del corpus que nombran el territorio, del que más lo menciona al que menos. Tocar el identificador abre el documento por ese fragmento."
               title="Qué dice el corpus"
             />
@@ -83,7 +84,11 @@ export function TerritoryDetail({
                 Ningún documento del corpus nombra este territorio con el filtro puesto.
               </p>
             ) : (
-              <FragmentList fragments={data.fragments} />
+              <FragmentList
+                entity={entity ? [entity.replaceAll("-", " ")] : []}
+                forms={data.forms?.length ? data.forms : [data.name]}
+                fragments={data.fragments}
+              />
             )}
           </section>
 
@@ -105,7 +110,7 @@ export function TerritoryDetail({
                 info="Alertas Tempranas de la Defensoría del Pueblo que nombran el departamento, de la más reciente a la más antigua. Una alerta de alcance nacional aparece en cada departamento que nombra."
                 title="Alertas tempranas"
               />
-              <AlertList alerts={data.alerts} />
+              <AlertList alerts={data.alerts} forms={data.forms?.length ? data.forms : [data.name]} />
             </section>
           ) : null}
         </>
@@ -114,7 +119,17 @@ export function TerritoryDetail({
   );
 }
 
-function FragmentList({ fragments }: { readonly fragments: Territory["fragments"] }) {
+function FragmentList({
+  fragments,
+  forms,
+  entity,
+}: {
+  readonly fragments: Territory["fragments"];
+  /** Las formas con que el corpus nombra el territorio: se marcan tal cual se contaron. */
+  readonly forms: readonly string[];
+  /** La entidad filtrada, si la hay, que también se marca. */
+  readonly entity: readonly string[];
+}) {
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? fragments : fragments.slice(0, VISIBLE);
 
@@ -122,24 +137,26 @@ function FragmentList({ fragments }: { readonly fragments: Territory["fragments"
     <div className="space-y-1">
       <ul className="space-y-2">
         {shown.map((fragment) => (
-          <li className="bg-card/60 space-y-1 rounded-lg border p-2.5" key={fragment.chunk_id}>
-            <div className="flex items-center gap-2 text-[11px]">
-              <span className={cn("rounded border px-1 font-mono", PHENOMENON_STYLE[fragment.phenomenon])}>
+          <li className="bg-card/60 space-y-1.5 rounded-lg border p-2.5" key={fragment.chunk_id}>
+            {/* Quién lo dice primero; el identificador, al pie, como la referencia que es. */}
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <span className={cn("rounded border px-1 font-mono text-[10px]", PHENOMENON_STYLE[fragment.phenomenon])}>
                 F{fragment.phenomenon}
               </span>
-              <DocumentLink chunkId={fragment.chunk_id} docId={fragment.doc_id}>
-                {fragment.doc_id}
-              </DocumentLink>
-              <span className="text-muted-foreground truncate">
-                {fragment.observatory?.replaceAll("_", " ")}
+              <span className="min-w-0 truncate font-medium">
+                {fragment.observatory?.replaceAll("_", " ") ?? "Sin observatorio"}
               </span>
-              <span className="text-muted-foreground ml-auto uppercase">{fragment.language}</span>
+              <span className="text-muted-foreground ml-auto shrink-0 text-[10px] uppercase">{fragment.language}</span>
             </div>
             {/* Los fragmentos traen URLs y códigos sin espacios: se cortan para no salirse. */}
             <p className="text-muted-foreground text-xs leading-relaxed break-words">
-              {fragment.excerpt}
+              <Highlight exact={forms} loose={entity} text={fragment.excerpt} />
               {fragment.truncated ? "…" : ""}
             </p>
+            <DocumentLink chunkId={fragment.chunk_id} className="text-muted-foreground block text-[10px]" docId={fragment.doc_id}>
+              {fragment.doc_id} · {chunkLabel(fragment.chunk_id)} · {fragment.mentions}{" "}
+              {fragment.mentions === 1 ? "mención" : "menciones"}
+            </DocumentLink>
           </li>
         ))}
       </ul>
@@ -211,7 +228,7 @@ const ALERT_KIND: Record<string, { readonly dot: string; readonly text: string; 
   Estructural: { dot: "bg-f3", text: "text-f3", label: "Riesgo estructural" },
 };
 
-function AlertList({ alerts }: { readonly alerts: Territory["alerts"] }) {
+function AlertList({ alerts, forms }: { readonly alerts: Territory["alerts"]; readonly forms: readonly string[] }) {
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? alerts : alerts.slice(0, VISIBLE);
 
@@ -231,19 +248,19 @@ function AlertList({ alerts }: { readonly alerts: Territory["alerts"] }) {
                 <span className={kind.text}>{kind.label}</span>
                 {alert.issued_on ? (
                   <time className="text-muted-foreground ml-auto" dateTime={alert.issued_on}>
-                    {alert.issued_on}
+                    {formatDate(alert.issued_on)}
                   </time>
                 ) : null}
               </div>
               <p className="text-muted-foreground line-clamp-3 text-xs leading-relaxed break-words">
-                {alert.excerpt}
+                <Highlight exact={forms} text={alert.excerpt} />
               </p>
               <DocumentLink
                 chunkId={alert.trace.chunk_id}
                 className="block text-[10px]"
                 docId={alert.doc_id}
               >
-                AT {alert.code} · {alert.doc_id}
+                Alerta {alert.code} · {alert.doc_id} · {chunkLabel(alert.trace.chunk_id)}
               </DocumentLink>
             </li>
           );

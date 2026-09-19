@@ -334,9 +334,13 @@ class Territory(BaseModel):
     name: str
     iso2: str | None = None
     level: str
+    # Como lo nombra el corpus («United States», «EE. UU.»): lo que se marca en cada fragmento.
+    forms: list[str] = []
     phenomenon: int | None = None
-    # Cuantos fragmentos del corpus nombran el territorio, mas alla de los que se devuelven.
+    # Cuantos fragmentos del corpus nombran el territorio, mas alla de los que se devuelven, y en
+    # cuantos documentos distintos: la ficha del mapa cuenta documentos.
     total_fragments: int
+    total_documents: int
     fragments: list[PlaceFragment]
     municipalities: list[Municipality]
     alerts: list[TerritoryAlert]

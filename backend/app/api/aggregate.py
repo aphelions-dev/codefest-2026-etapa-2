@@ -501,7 +501,7 @@ async def territory(
         raise HTTPException(404, f"No hay ningun territorio con id {place_id}")
 
     value = phenomenon.value if phenomenon else None
-    total, rows = await territory_db.fragments(
+    total, documents, rows = await territory_db.fragments(
         pool, place_id, value, limit, date_from, date_to, entity
     )
     towns = (
@@ -520,8 +520,10 @@ async def territory(
         name=place["name"],
         iso2=place["iso2"],
         level=place["level"],
+        forms=list(place["forms"] or []),
         phenomenon=value,
         total_fragments=total,
+        total_documents=documents,
         fragments=[
             PlaceFragment(
                 doc_id=row["doc_id"],

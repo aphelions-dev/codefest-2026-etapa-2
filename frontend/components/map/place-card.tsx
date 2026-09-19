@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { Flag } from "@/components/flag";
 import { DocumentLink } from "@/components/document-view";
+import { chunkLabel } from "@/components/highlight";
 import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -104,12 +105,14 @@ export function PlaceCard({
             {place.headline}
           </div>
           <div className="text-muted-foreground text-[11px] leading-snug">{place.detail}</div>
-          {/* La cifra del mapa lleva a un fragmento real: es lo que la hace verificable. */}
-          <div className="text-muted-foreground text-[11px]">
-            Evidencia:{" "}
+          {/* La cifra lleva a un fragmento real, que es lo que la hace verificable. Se dice que es
+              uno de muestra y dónde está el resto, para que no se lea como toda la evidencia. */}
+          <div className="text-muted-foreground pt-1 text-[11px] leading-snug">
+            {guide.sample}:{" "}
             <DocumentLink chunkId={place.trace.chunk_id} docId={place.trace.doc_id}>
-              {place.trace.chunk_id}
+              {place.trace.doc_id} · {chunkLabel(place.trace.chunk_id)}
             </DocumentLink>
+            {guide.more ? <div className="text-muted-foreground/80 text-[10px]">← {guide.more}</div> : null}
           </div>
         </div>
       ) : (

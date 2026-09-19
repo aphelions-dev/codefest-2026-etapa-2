@@ -24,6 +24,8 @@ export type MapView = (typeof VIEWS)[number];
 export type MapDatum = {
   readonly id: string;
   readonly name: string;
+  /** Dónde está, cuando el nombre solo no basta: un municipio se repite entre departamentos. */
+  readonly region?: string;
   readonly iso2: string | null;
   /** Lo que codifica el color y ordena el ranking. */
   readonly value: number;
@@ -43,6 +45,10 @@ export type MapGuide = {
   readonly read: string;
   readonly source: string;
   readonly limits: string;
+  /** Qué es el fragmento al que lleva la ficha: uno de muestra, no toda la evidencia. */
+  readonly sample: string;
+  /** Dónde está el resto de la evidencia, si está en algún sitio. */
+  readonly more: string | null;
 };
 
 /**
@@ -110,6 +116,8 @@ const EMPTY_GUIDE: MapGuide = {
   read: "",
   source: "",
   limits: "",
+  sample: "",
+  more: null,
 };
 
 /**
@@ -178,6 +186,8 @@ export function useMapLayer(
         }`,
         limits:
           "Una alerta de alcance nacional cuenta en cada departamento que nombra: la cifra es «alertas que nombran el territorio», no «alertas sobre el territorio».",
+        sample: "La alerta más reciente",
+        more: "Todas sus alertas, en la barra lateral",
       },
       options: alerts.data
         ? [
@@ -206,6 +216,7 @@ export function useMapLayer(
         (feature): MapDatum => ({
           id: feature.properties.pcode,
           name: feature.properties.admin2,
+          region: `${feature.properties.admin1}, ${feature.properties.country}`,
           iso2: null,
           value: feature.properties.groups.length,
           headline: `${feature.properties.groups.length} grupos`,
@@ -231,12 +242,17 @@ export function useMapLayer(
         )} municipios de Bolivia, Brasil, Colombia, Ecuador, Perú y Venezuela`,
         limits:
           "Solo la cuenca amazónica. Un municipio sin información no se investigó, que no es lo mismo que sin presencia, y por eso no aparece en el mapa.",
+        sample: "El registro de la fuente",
+        more: null,
       },
-      options: (presence.data?.groups ?? []).map((group) => ({
-        value: group.name,
-        label: group.name,
-        count: group.municipalities,
-      })),
+      // «Otros» no es un grupo sino los que la fuente no nombra aparte: se dice y va al final.
+      options: [...(presence.data?.groups ?? [])]
+        .sort((a, b) => Number(a.name === "Otros") - Number(b.name === "Otros"))
+        .map((group) => ({
+          value: group.name,
+          label: group.name === "Otros" ? "Otros grupos" : group.name,
+          count: group.municipalities,
+        })),
       coverage: presence.data
         ? `${formatNumber(presence.data.with_presence)} municipios con presencia y ${formatNumber(presence.data.without_information)} sin investigar, de ${formatNumber(presence.data.municipalities)}`
         : "",
@@ -268,12 +284,14 @@ export function useMapLayer(
       title: level === "department" ? "Departamentos nombrados en el corpus" : "Países nombrados en el corpus",
       unit: "Documentos distintos que nombran el territorio",
       measures: `Cuántos documentos del corpus nombran cada ${level === "department" ? "departamento" : "país"}.`,
-      read: "Más intenso, más documentos; la mitad menos citada queda sin color.",
+      read: "Más intenso, más documentos. Sin color, ningún documento lo nombra con este filtro.",
       source: "Corpus de la Etapa 1 · fronteras de Natural Earth",
       limits:
         level === "department"
           ? "Mide cuánto se escribe sobre el territorio, no la intensidad de lo que ocurre en él."
           : "Nombrar no es actuar: un país aparece también cuando se lo analiza desde fuera.",
+      sample: "El fragmento que más lo menciona",
+      more: "Todos los fragmentos, en la barra lateral",
     },
     options: [],
     coverage: "",

@@ -850,10 +850,17 @@ export interface components {
             iso2?: string | null;
             /** Level */
             level: string;
+            /**
+             * Forms
+             * @default []
+             */
+            forms: string[];
             /** Phenomenon */
             phenomenon?: number | null;
             /** Total Fragments */
             total_fragments: number;
+            /** Total Documents */
+            total_documents: number;
             /** Fragments */
             fragments: components["schemas"]["PlaceFragment"][];
             /** Municipalities */
