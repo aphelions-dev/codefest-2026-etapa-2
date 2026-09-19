@@ -418,9 +418,14 @@ class Timeline(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    """La pregunta del usuario. `input` es lo que manda el frontend de chat ya construido."""
+    """La forma canonica de la pregunta: `input`, que es lo que manda nuestro frontend de chat.
 
-    model_config = ConfigDict(extra="forbid")
+    `extra="ignore"` y no `forbid` como el resto: el endpoint acepta la pregunta en texto plano o
+    bajo otros nombres de campo (ver `app.api.chat`), y rechazar un `session_id` de mas convertiria
+    una pregunta perfectamente legible en un 422. El modelo sigue siendo quien fija los limites.
+    """
+
+    model_config = ConfigDict(extra="ignore")
 
     input: str = Field(min_length=1, max_length=4000)
 

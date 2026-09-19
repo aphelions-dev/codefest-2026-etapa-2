@@ -174,6 +174,16 @@ curl -X POST http://127.0.0.1:8000/chat \
 Responde con el contrato de la especificación: `respuesta`, `evaluacion` (con `retrieval_context`
 y `tools_called`) y `metadata` (tokens por agente, número de interacciones, latencia y estado).
 
+La pregunta se puede mandar como el Anexo A.4 la describe, «en texto plano o JSON», y dentro del
+JSON con cualquiera de los nombres habituales del campo; los campos que sobren se ignoran:
+
+```bash
+curl -X POST http://127.0.0.1:8000/chat -H 'Content-Type: text/plain' \
+  --data '¿Qué desafíos plantea la IA en las operaciones espaciales?'
+curl -X POST http://127.0.0.1:8000/chat -H 'Content-Type: application/json' \
+  -d '{"question": "…", "session_id": "lo-que-sea"}'
+```
+
 El diseño del grafo, el reparto de modelos y las defensas frente a inyección están en la
 sección 2 de [`docs/arquitectura.md`](docs/arquitectura.md).
 

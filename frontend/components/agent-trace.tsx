@@ -219,6 +219,7 @@ const STATUS: Record<string, string> = {
   no_verificada: "El verificador no pudo confirmar todas las afirmaciones: léela con cautela y revisa sus fuentes.",
   error_entrada_bloqueada: "La pregunta se bloqueó en la revisión de seguridad.",
   error_salida_bloqueada: "La respuesta se bloqueó en la revisión final.",
+  error_interno: "El servicio falló al atender la consulta: no es un problema de la pregunta ni del corpus.",
 };
 
 /** El estado que devolvió el agente, explicado, para que un rechazo no se lea como una respuesta. */

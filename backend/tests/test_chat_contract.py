@@ -5,7 +5,16 @@ modelos Pydantic: es la comprobacion de que ningun camino del grafo puede entreg
 organizacion no pueda leer.
 """
 
-from app.agent.graph import BLOCKED_INPUT, NO_EVIDENCE, OK, UNVERIFIED, Runtime, build
+from app.agent.graph import (
+    BLOCKED_INPUT,
+    INTERNAL_ERROR,
+    NO_EVIDENCE,
+    OK,
+    UNVERIFIED,
+    Runtime,
+    build,
+)
+from app.agent.llm import ModelError
 from app.api.chat import _assemble
 from app.responses import ChatResponse
 from tests.conftest import (
@@ -28,7 +37,7 @@ async def run(client, retriever, settings, question=QUESTION) -> ChatResponse:
     state = await graph.ainvoke(
         {"question": question, "retries": 0, "usage": [], "tools": [], "agents": []}
     )
-    return _assemble(question, state, 1234, runtime)
+    return _assemble(question, state, 1234)
 
 
 async def test_respuesta_completa_suma_las_cinco_capas(settings):
@@ -142,6 +151,43 @@ async def test_el_saludo_no_gasta_recuperacion_ni_guardianes(settings):
     # Solo el guardian de entrada: el saludo lo reconoce una regla, sin modelo.
     assert response.metadata.num_interacciones == 1
     assert response.evaluacion.retrieval_context is None
+
+
+async def test_el_redactor_caido_no_se_declara_como_falta_de_evidencia(settings):
+    """El corpus si tenia fragmentos: negarlos contradiria el propio `retrieval_context`."""
+
+    class Mudo(FakeClient):
+        async def complete(self, *, agent, **kwargs):
+            if agent == "rag_analyst":
+                raise ModelError("el proxy no respondio")
+            return await super().complete(agent=agent, **kwargs)
+
+    client = Mudo(
+        {"input_guardrail": [attack(False)], "orchestrator": [decompose([QUESTION], 2)]}
+    )
+    response = await run(client, FakeRetriever(EVIDENCE), settings)
+
+    assert response.metadata.estado == INTERNAL_ERROR
+    assert response.evaluacion.retrieval_context is not None
+    assert "no encuentro" not in response.respuesta.lower()
+
+
+async def test_la_recuperacion_caida_no_llega_al_redactor(settings):
+    """Sin evidencia por un fallo de la base no se redacta ni se verifica, y se declara."""
+
+    class Caido:
+        async def search(self, queries, phenomenon=None):
+            raise RuntimeError("la base no responde")
+
+    client = FakeClient(
+        {"input_guardrail": [attack(False)], "orchestrator": [decompose([QUESTION], 2)]}
+    )
+    response = await run(client, Caido(), settings)
+
+    assert response.metadata.estado == INTERNAL_ERROR
+    assert response.evaluacion.retrieval_context is None
+    # Ni redactor ni verificador ni guardian de salida: dos llamadas y se para.
+    assert response.metadata.num_interacciones == 2
 
 
 async def test_la_salida_bloqueada_sustituye_la_respuesta(settings):

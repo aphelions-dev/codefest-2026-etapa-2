@@ -1,9 +1,13 @@
 """El grafo: cinco agentes y el ciclo de reintento.
 
-    input_guardrail -> orchestrator -> retrieve -> write -> verify -> output_guardrail
-                    |                     ^                   |
-                    v                     |                   v
-                   fin                 rewrite <--------------+
+    input_guardrail -> orchestrator -> retrieve -> write -> verify -> output_guardrail -> fin
+           |                |             |          |         |
+           v                v             v          v         v
+          fin              fin           fin        fin     rewrite --> retrieve
+
+Los cuatro caminos que acaban en `fin` sin pasar por el guardian de salida entregan un texto que
+escribimos nosotros —entrada bloqueada, saludo, sin evidencia, fallo del servicio—, y no hay nada
+que inspeccionar en un texto propio.
 
 `retrieve` y `write` son dos nodos del mismo agente, el analista RAG. Estan separados porque el
 redactor va sin herramientas: separado redacta mejor, y un fragmento envenenado no tiene nada que
@@ -52,6 +56,10 @@ BLOCKED_INPUT = "error_entrada_bloqueada"
 BLOCKED_OUTPUT = "error_salida_bloqueada"
 NO_EVIDENCE = "sin_evidencia"
 UNVERIFIED = "no_verificada"
+# Un fallo del servicio, no del corpus. Va separado de `sin_evidencia` a proposito: decir «no hay
+# evidencia» cuando lo que se cayo fue el proxy o la base afirma algo falso sobre el corpus, y
+# ademas oculta en la nota de calidad lo que la especificacion pide declarar en `estado`.
+INTERNAL_ERROR = "error_interno"
 
 
 @dataclass
@@ -167,7 +175,24 @@ def build(runtime: Runtime):
         """Las dos herramientas del analista. Ninguna llamada a modelo: el encoder es local."""
         queries = state["queries"]
         phenomenon = state.get("phenomenon")
-        found = await runtime.retriever.search(queries, phenomenon)
+        try:
+            found = await runtime.retriever.search(queries, phenomenon)
+        except Exception:
+            # La base o el encoder fallaron. Se declara como fallo del servicio y no como falta de
+            # evidencia, y se corta aqui: sin fragmentos no hay nada que redactar ni que verificar.
+            log.exception("la recuperacion fallo")
+            return {
+                "answer": prompts.FAILED,
+                "status": INTERNAL_ERROR,
+                "tools": [
+                    ToolRecord(
+                        name="search_corpus",
+                        input_parameters={"query": " | ".join(queries), "phenomenon": phenomenon},
+                        output="la recuperacion fallo",
+                    )
+                ],
+                "agents": ["rag_analyst"],
+            }
         threshold = runtime.settings.evidence_threshold
         kept = [fragment for fragment in found if fragment.similarity >= threshold]
 
@@ -207,8 +232,11 @@ def build(runtime: Runtime):
                 user=f"{prompts.evidence_block(fragments)}\n\n<pregunta>\n{state['sanitized']}\n</pregunta>",
             )
         except ModelError:
+            # El corpus si tenia evidencia: lo que falto fue el modelo. Confundirlo con
+            # `sin_evidencia` dejaria una respuesta que niega los fragmentos que van en
+            # `retrieval_context`.
             log.exception("el redactor no respondio")
-            return {"answer": prompts.NO_EVIDENCE, "status": NO_EVIDENCE}
+            return {"answer": prompts.FAILED, "status": INTERNAL_ERROR}
 
         return {"answer": text, "status": OK, "usage": [usage], "agents": ["rag_analyst"]}
 
@@ -257,9 +285,14 @@ def build(runtime: Runtime):
         # Saludo o pregunta ajena: ya hay respuesta y no hay nada que verificar.
         return END if state.get("answer") else "retrieve"
 
+    def after_retrieve(state: State) -> str:
+        # Si la recuperacion se cayo no hay evidencia con la que redactar: se entrega el fallo.
+        return END if state.get("status") == INTERNAL_ERROR else "write"
+
     def after_write(state: State) -> str:
-        # Sin evidencia no hay nada contra lo que verificar ni nada que pueda ser toxico.
-        return END if state.get("status") == NO_EVIDENCE else "verify"
+        # Sin evidencia, o con el redactor caido, no hay nada contra lo que verificar ni nada
+        # escrito por un modelo que pueda ser toxico: las dos respuestas las escribimos nosotros.
+        return END if state.get("status") in (NO_EVIDENCE, INTERNAL_ERROR) else "verify"
 
     def after_verify(state: State) -> str:
         if not state.get("rejection"):
@@ -282,7 +315,7 @@ def build(runtime: Runtime):
     graph.add_edge(START, "input_guardrail")
     graph.add_conditional_edges("input_guardrail", after_input, ["orchestrator", END])
     graph.add_conditional_edges("orchestrator", after_orchestrator, ["retrieve", END])
-    graph.add_edge("retrieve", "write")
+    graph.add_conditional_edges("retrieve", after_retrieve, ["write", END])
     graph.add_conditional_edges("write", after_write, ["verify", END])
     graph.add_conditional_edges("verify", after_verify, ["rewrite", "output_guardrail"])
     graph.add_edge("rewrite", "retrieve")

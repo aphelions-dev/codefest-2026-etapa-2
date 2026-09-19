@@ -196,7 +196,17 @@ campo de más o de menos.
   juntos, así que perderlo por el camino no es posible.
 - **`metadata.num_interacciones` cuenta llamadas a modelo**, que es la definición de la
   especificación.
-- **`metadata.latencia_ms`** se mide con `time.perf_counter()` alrededor del manejador completo.
+- **`metadata.latencia_ms`** se mide con `time.perf_counter()` alrededor del recorrido del grafo.
+- **La entrada se lee con la manga ancha que pide el Anexo A.4**, que habla de «texto plano o
+  JSON»: el endpoint acepta el cuerpo como texto plano, como cadena JSON o como objeto, y dentro
+  del objeto busca la pregunta en `input` y en los demás nombres con que suele venir (`question`,
+  `query`, `message`, `pregunta`…). Lo que sobre en el cuerpo se ignora. El único cuerpo que se
+  rechaza es el que no trae ninguna pregunta, porque durante la ventana de evaluación **un 422 es
+  una pregunta perdida y no hay reintento**. `ChatRequest` sigue fijando los límites, y es la forma
+  canónica que documenta el OpenAPI.
+- **Ningún camino devuelve un 500.** La especificación dice que `metadata.estado` es `ok` «o un
+  código de error si el procesamiento falló», así que un fallo del servicio sale con el contrato
+  entero y su estado, no como un error de FastAPI sin `respuesta` ni `evaluacion`.
 
 ### 2.7 Estados
 
@@ -207,6 +217,7 @@ campo de más o de menos.
 | `no_verificada` | Se agotaron los reintentos; se entrega lo que hay, declarado |
 | `error_entrada_bloqueada` | El guardián de entrada cortó la consulta |
 | `error_salida_bloqueada` | El guardián de salida retuvo la respuesta |
+| `error_interno` | Falló el servicio: la base, el encoder o el redactor. **Nunca se confunde con `sin_evidencia`**: decir «el corpus no tiene evidencia» cuando lo que se cayó fue el proxy afirma algo falso sobre el corpus, y contradice los fragmentos que van en el propio `retrieval_context` |
 
 ### 2.8 Observabilidad
 

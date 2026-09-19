@@ -446,14 +446,6 @@ export interface components {
          */
         BreakdownField: "phenomenon" | "observatory" | "language" | "format";
         /**
-         * ChatRequest
-         * @description La pregunta del usuario. `input` es lo que manda el frontend de chat ya construido.
-         */
-        ChatRequest: {
-            /** Input */
-            input: string;
-        };
-        /**
          * ChatResponse
          * @description La respuesta del endpoint, con la estructura exacta que exige la especificacion.
          */
@@ -1481,7 +1473,11 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ChatRequest"];
+                "application/json": {
+                    /** Input */
+                    input: string;
+                };
+                "text/plain": string;
             };
         };
         responses: {
@@ -1494,14 +1490,12 @@ export interface operations {
                     "application/json": components["schemas"]["ChatResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description El cuerpo de la peticion no trae ninguna pregunta */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };

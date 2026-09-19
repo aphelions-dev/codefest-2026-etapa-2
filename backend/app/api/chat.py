@@ -4,14 +4,17 @@ La respuesta se arma aqui y se valida contra los modelos Pydantic antes de salir
 lo que se califica, y un campo de mas o de menos no puede depender de por donde fue el grafo.
 """
 
+import json
 import logging
 import time
 from collections import OrderedDict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import ValidationError
 
-from app.agent.graph import BLOCKED_INPUT, OK, Runtime
+from app.agent import prompts
+from app.agent.graph import BLOCKED_INPUT, INTERNAL_ERROR, OK
 from app.agent.state import ToolRecord, Usage
 from app.responses import (
     AgentTokens,
@@ -27,6 +30,22 @@ log = logging.getLogger("agent.chat")
 
 router = APIRouter()
 
+# El Anexo A.4 pide que el endpoint reciba la pregunta «en texto plano o JSON», y la ficha declara
+# `text/plain` como modo de entrada. Asi que se leen las dos formas, y dentro del JSON cualquiera de
+# los nombres con que se suele mandar una pregunta: un 422 durante la ventana de evaluacion es una
+# pregunta perdida y no hay reintento. Lo que sobre en el cuerpo se ignora en vez de rechazarse.
+QUESTION_FIELDS = (
+    "input",
+    "question",
+    "query",
+    "message",
+    "text",
+    "prompt",
+    "pregunta",
+    "consulta",
+    "mensaje",
+)
+
 
 async def get_agent(request: Request):
     """El grafo compilado y su runtime, montados al arrancar el proceso."""
@@ -39,18 +58,45 @@ async def get_agent(request: Request):
 Agent = Annotated[tuple, Depends(get_agent)]
 
 
-@router.post("/chat", summary="Pregunta al asistente del radar")
-async def chat(payload: ChatRequest, agent: Agent) -> ChatResponse:
+@router.post(
+    "/chat",
+    summary="Pregunta al asistente del radar",
+    # El cuerpo se lee a mano para aceptar las dos formas, asi que el esquema se declara aqui:
+    # `ChatRequest` sigue siendo la unica fuente de la forma canonica y `text/plain` queda
+    # documentado en el OpenAPI, que es de donde salen los tipos del frontend.
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/json": {"schema": ChatRequest.model_json_schema()},
+                "text/plain": {"schema": {"type": "string"}},
+            },
+        }
+    },
+    # Sin parametro de cuerpo validado, FastAPI ya no declara el 422 solo. Se declara aqui porque
+    # existe: es el unico cuerpo que se rechaza, el que no trae ninguna pregunta.
+    responses={422: {"description": "El cuerpo de la peticion no trae ninguna pregunta"}},
+)
+async def chat(request: Request, agent: Agent) -> ChatResponse:
     """Una pregunta, una respuesta con su evidencia y su coste."""
-    graph, runtime = agent
+    # El runtime lo necesitan los nodos, que ya lo llevan cerrado dentro del grafo compilado.
+    graph, _ = agent
+    question = await _question(request)
     started = time.perf_counter()
 
-    state = await graph.ainvoke(
-        {"question": payload.input, "retries": 0, "usage": [], "tools": [], "agents": []}
-    )
+    try:
+        state = await graph.ainvoke(
+            {"question": question, "retries": 0, "usage": [], "tools": [], "agents": []}
+        )
+    except Exception:
+        # Ultimo recinto: los nodos ya atrapan lo suyo, asi que llegar aqui es un fallo que no se
+        # previo. Se declara en `estado` y se responde con el contrato, porque un 500 sin `respuesta`
+        # ni `evaluacion` es una pregunta perdida para quien evalua.
+        log.exception("la consulta fallo sin que ningun nodo lo atrapase")
+        state = {"answer": prompts.FAILED, "status": INTERNAL_ERROR}
 
     latency = int((time.perf_counter() - started) * 1000)
-    response = _assemble(payload.input, state, latency, runtime)
+    response = _assemble(question, state, latency)
     log.info(
         "consulta atendida",
         extra={
@@ -63,7 +109,43 @@ async def chat(payload: ChatRequest, agent: Agent) -> ChatResponse:
     return response
 
 
-def _assemble(question: str, state: dict, latency: int, runtime: Runtime) -> ChatResponse:
+async def _question(request: Request) -> str:
+    """La pregunta del usuario, venga como JSON o como texto plano."""
+    raw = (await request.body()).decode("utf-8", errors="replace").strip()
+    if not raw:
+        raise HTTPException(422, "El cuerpo de la peticion no trae ninguna pregunta")
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        # Texto plano, que es el modo que declara la ficha del agente.
+        return _bounded(raw)
+
+    if isinstance(payload, dict):
+        for field in QUESTION_FIELDS:
+            value = payload.get(field)
+            if isinstance(value, str) and value.strip():
+                return _bounded(value)
+        raise HTTPException(
+            422,
+            "El JSON no trae la pregunta en ninguno de los campos esperados: "
+            + ", ".join(QUESTION_FIELDS),
+        )
+    # Una cadena JSON desnuda, o cualquier otro escalar: el cuerpo entero es la pregunta.
+    return _bounded(payload if isinstance(payload, str) else raw)
+
+
+def _bounded(question: str) -> str:
+    """Los limites del contrato en un solo sitio: los declara `ChatRequest`."""
+    try:
+        return ChatRequest(input=question.strip()).input
+    except ValidationError as error:
+        raise HTTPException(
+            422, "La pregunta esta vacia o pasa del limite de 4000 caracteres"
+        ) from error
+
+
+def _assemble(question: str, state: dict, latency: int) -> ChatResponse:
     usage: list[Usage] = state.get("usage") or []
     tools: list[ToolRecord] = state.get("tools") or []
     fragments = state.get("fragments") or []

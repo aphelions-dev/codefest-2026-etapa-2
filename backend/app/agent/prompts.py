@@ -88,6 +88,13 @@ BLOCKED = (
     "entornos militares, seguridad del entorno espacial y dinámicas territoriales en América Latina."
 )
 
+# Un fallo del servicio, no del corpus: nunca se dice que no hay evidencia cuando lo que se cayo
+# fue la base o el proxy. Sin detalles del fallo, que ya quedan en el log estructurado.
+FAILED = (
+    "No he podido completar la consulta por un fallo del servicio. Vuelve a intentarlo en un "
+    "momento; la pregunta es válida."
+)
+
 
 def evidence_block(fragments: list[Fragment]) -> str:
     """La evidencia, delimitada y declarada como datos.
