@@ -95,10 +95,27 @@ const TOOL_AGENT: Record<string, string> = {
   detect_indirect_injection: "output_guardrail",
 };
 
+/**
+ * El modelo no escribe siempre el guion ASCII. Medido contra `gpt-oss-120b`: usa U+2011, el guion
+ * no separable, y cuela espacios de ancho cero dentro de la cita. El backend ya lo normaliza antes
+ * de comprobar la trazabilidad (`verifier.py`), y aquí hace falta lo mismo: una cita que el patrón
+ * no reconoce se pinta como texto plano y deja de llevar a su fragmento, que es justo la
+ * trazabilidad que la especificación exige.
+ */
+const DASH = "[-\\u2010-\\u2015\\u2212]";
+const BLANK = "[\\s\\u200b-\\u200d\\ufeff]*";
+const ID = `F\\d${DASH}[A-Z0-9]+${DASH}\\d+`;
+
 // Un identificador de documento, con su fragmento si lo trae.
-const DOC_ID = /F\d-[A-Z0-9]+-\d+/g;
-// `[F3-X-022 · F3-X-022-chunk-0005] texto`: así llega cada fragmento en `retrieval_context`.
+const DOC_ID = new RegExp(ID, "g");
+// `[F3-X-022 · F3-X-022-chunk-0005] texto`: así llega cada fragmento en `retrieval_context`. Lo
+// escribe el backend, así que aquí el guion sí es siempre el ASCII.
 const CONTEXT = /^\[(F\d-[A-Z0-9]+-\d+)\s*·\s*(F\d-[A-Z0-9]+-\d+-chunk-\d+)\]\s*/;
+
+/** El identificador en la forma que tiene en el corpus: guiones ASCII y nada invisible. */
+function canonical(id: string): string {
+  return id.replace(/[\u200b-\u200d\ufeff]/g, "").replace(/[\u2010-\u2015\u2212]/g, "-");
+}
 
 function isTool(name: string): name is ToolName {
   return name in TOOLS;
@@ -125,7 +142,7 @@ export async function ask(question: string): Promise<Answer> {
 
   const body = (await response.json()) as AgentResponse;
   const calls = body.evaluacion?.tools_called ?? [];
-  const cited = new Set(body.respuesta.match(DOC_ID) ?? []);
+  const cited = new Set((body.respuesta.match(DOC_ID) ?? []).map(canonical));
 
   // Los fragmentos leídos, en el orden de la recuperación; el primero de cada documento es a donde
   // lleva su cita.
@@ -189,11 +206,14 @@ export async function ask(question: string): Promise<Answer> {
 
 /**
  * Una cita, en cualquiera de las formas en que el redactor la escribe: `[F1-X-005]`, `【F1-X-005】`,
- * `(F1-X-005)`, `**F1-X-005**`, agrupadas con comas o con el fragmento pegado. El backend ya las
- * reconoce todas; aquí se convierten en enlaces.
+ * `(F1-X-005)`, `**F1-X-005**`, con el guion no separable, con espacios de ancho cero dentro,
+ * agrupadas con comas o con el fragmento pegado. El backend ya las reconoce todas; aquí se
+ * convierten en enlaces.
  */
-const CITATION_GROUP =
-  /(?:\*\*)?[[【(]\s*((?:F\d-[A-Z0-9]+-\d+(?:-chunk-\d+)?\s*[,;·]?\s*)+)[\]】)](?:\*\*)?/g;
+const CITATION_GROUP = new RegExp(
+  `(?:\\*\\*)?[[【(]${BLANK}((?:${ID}(?:${DASH}chunk${DASH}\\d+)?${BLANK}[,;·]?${BLANK})+)[\\]】)](?:\\*\\*)?`,
+  "g",
+);
 
 /** La ruta de relleno de un enlace de cita: lo que importa va en la consulta. */
 const CITATION_BASE = "http://citation.invalid";
@@ -217,7 +237,7 @@ export function parseCitation(href: string | undefined) {
  */
 export function linkCitations(text: string, anchors: Record<string, string>): string {
   return text.replace(CITATION_GROUP, (group) =>
-    [...new Set(group.match(DOC_ID) ?? [])]
+    [...new Set((group.match(DOC_ID) ?? []).map(canonical))]
       .map((id) => `[\`${id}\`](/?doc=${id}${anchors[id] ? `&fragmento=${anchors[id]}` : ""})`)
       .join(" "),
   );
