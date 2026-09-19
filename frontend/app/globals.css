@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Tokens compartidos por todos los componentes: el Anexo B exige que un mismo fenomeno se
+   represente siempre con el mismo color en todas las vistas del tablero. */
+@theme {
+  --color-background: oklch(0.16 0.01 260);
+  --color-surface: oklch(0.21 0.012 260);
+  --color-border: oklch(0.32 0.014 260);
+  --color-foreground: oklch(0.96 0.005 260);
+  --color-muted: oklch(0.68 0.012 260);
+  --color-accent: oklch(0.78 0.13 200);
+
+  /* Un color por fenomeno, distinguibles con deuteranopia y protanopia. */
+  --color-phenomenon-1: oklch(0.74 0.14 85);
+  --color-phenomenon-2: oklch(0.72 0.13 235);
+  --color-phenomenon-3: oklch(0.7 0.15 335);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+}

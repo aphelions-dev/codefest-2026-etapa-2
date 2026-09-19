@@ -1,0 +1,51 @@
+# Nombre fijo: el volumen con el indice cargado no depende de la carpeta del repo.
+name: radar-ad-astra
+
+# Desarrollo local. En Coolify son tres recursos: el backend, y la misma imagen del frontend dos
+# veces con NEXT_PUBLIC_SURFACE distinto. Los modelos los sirve el proxy de la organizacion.
+services:
+  db:
+    image: pgvector/pgvector:0.8.6-pg18-trixie
+    environment:
+      POSTGRES_USER: radar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: radar
+    ports:
+      - "5432:5432"
+    volumes:
+      # Postgres 18 monta los datos en /var/lib/postgresql, no en .../data.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radar"]
+      interval: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://radar:${POSTGRES_PASSWORD}@db:5432/radar
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL}
+      LITELLM_API_KEY: ${LITELLM_API_KEY}
+      FAST_MODEL: ${FAST_MODEL}
+      DEEP_MODEL: ${DEEP_MODEL}
+      CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # 127.0.0.1 y no localhost: en Windows localhost prueba IPv6 primero y suma segundos.
+        NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
+        NEXT_PUBLIC_SURFACE: dashboard
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

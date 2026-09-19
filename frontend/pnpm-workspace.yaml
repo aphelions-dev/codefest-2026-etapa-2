@@ -1,0 +1,9 @@
+# pnpm 11 falla la instalacion si un paquete trae scripts de build sin declarar. `unrs-resolver`
+# llega con eslint-config-next y solo hace falta para el linter, no para compilar.
+allowBuilds:
+  unrs-resolver: false
+
+# sharp llega como dependencia opcional de Next y arrastra binarios de libvips. La app no usa
+# next/image (`images.unoptimized`), asi que no entra en la imagen.
+overrides:
+  sharp: "-"

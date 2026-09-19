@@ -1,0 +1,37 @@
+{
+  "name": "radar-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "api:types": "openapi-typescript http://127.0.0.1:8000/openapi.json -o lib/api-types.ts"
+  },
+  "dependencies": {
+    "class-variance-authority": "0.7.1",
+    "lucide-react": "1.45.0",
+    "maplibre-gl": "6.9.0",
+    "next": "16.3.5",
+    "nuqs": "2.10.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "recharts": "3.10.1",
+    "tailwind-merge": "3.6.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/geojson": "7946.0.16",
+    "@types/node": "20.19.43",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.5",
+    "openapi-typescript": "7.13.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3"
+  },
+  "packageManager": "pnpm@11.20.0"
+}
