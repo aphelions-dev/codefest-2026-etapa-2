@@ -12,5 +12,9 @@ componente o añadir una fuente de datos.
 
 ## Código
 
+| Componente | Origen | Licencia | Dónde |
+|---|---|---|---|
+| Envoltorio declarativo de MapLibre | [mapcn](https://github.com/AnmolSaini16/mapcn) | MIT | `frontend/components/ui/map.tsx` |
+
 Las dependencias directas y sus licencias están en `frontend/package.json` y
 `backend/pyproject.toml`, con las versiones exactas fijadas en los archivos de bloqueo.

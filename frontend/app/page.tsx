@@ -1,17 +1,22 @@
-import { API_URL, SURFACE } from "@/lib/env";
+import { Suspense } from "react";
 
-/** Esqueleto: confirma que la imagen se despliega y contra que backend apunta. Las dos superficies
- *  crecen desde aqui, el tablero de componentes y el chat de pruebas manuales. */
+import { Chat } from "@/components/chat/surface";
+import { Dashboard } from "@/components/dashboard";
+import { SURFACE } from "@/lib/env";
+
+/**
+ * La misma imagen sirve las dos superficies. El tablero es el Reto 2; el chat a secas es el
+ * frontend de pruebas manuales del Reto 1, que se despliega aparte para que retocar el tablero no
+ * pueda tumbarlo durante su ventana de evaluación.
+ *
+ * El tablero lee el filtro global de la URL, y eso obliga a un límite de Suspense para que la
+ * página se pueda prerenderizar.
+ */
 export default function Home() {
+  if (SURFACE === "chat") return <Chat />;
   return (
-    <main className="grid min-h-dvh place-items-center p-6">
-      <div className="max-w-md space-y-3 text-center">
-        <h1 className="text-2xl font-semibold">Radar Estratégico de Tendencias Aeroespaciales</h1>
-        <p className="text-muted text-sm">
-          Superficie <code className="text-accent">{SURFACE}</code>, contra{" "}
-          <code className="text-accent">{API_URL}</code>.
-        </p>
-      </div>
-    </main>
+    <Suspense fallback={<main className="grid h-dvh place-items-center text-sm">Cargando el radar…</main>}>
+      <Dashboard />
+    </Suspense>
   );
 }
