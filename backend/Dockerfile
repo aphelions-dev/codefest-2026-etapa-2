@@ -17,6 +17,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3')"
 
 COPY app ./app
+# El precompute viaja en la imagen para poder regenerar datos derivados en produccion desde la
+# terminal del contenedor (`python -m precompute.places`), contra la misma base.
+COPY precompute ./precompute
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 

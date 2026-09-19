@@ -14,6 +14,7 @@ from app.agent.llm import Client
 from app.agent.retrieval import Retriever
 from app.api import aggregate, chat
 from app.config import settings
+from app.db.schema import SCHEMA
 from app.logging import configure
 
 log = logging.getLogger("agent.main")
@@ -40,6 +41,16 @@ async def lifespan(app: FastAPI):
         if settings.database_url
         else None
     )
+
+    # El esquema es idempotente (`if not exists`): aplicarlo al arrancar garantiza que la base tiene
+    # las columnas que esta version lee aunque el precompute todavia no haya corrido en ella. Si
+    # falla, se registra y el servicio sigue: degradar, no tumbar.
+    if app.state.pool is not None:
+        try:
+            async with app.state.pool.acquire() as connection:
+                await connection.execute(SCHEMA)
+        except asyncpg.PostgresError:
+            log.exception("no se pudo aplicar el esquema")
 
     app.state.agent = None
     client: Client | None = None
