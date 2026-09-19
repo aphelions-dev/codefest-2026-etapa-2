@@ -4,6 +4,7 @@ import { InfoIcon } from "lucide-react";
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { rankOf } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export const SECTION_TITLE = "font-medium text-[11px] text-muted-foreground uppercase tracking-wide";
@@ -91,6 +92,8 @@ export function Ranking<T>({ items, name, value, id, color, onSelect, icon, meta
   const list = useRef<HTMLUListElement>(null);
   const fitting = useFittingRows(list, items.length);
   const max = items.length ? value(items[0]) : 1;
+  // Puesto con empates: los que tienen la misma cifra comparten número.
+  const values = items.map(value);
   const shown = expanded ? items : items.slice(0, fitting);
   return (
     <div className="space-y-1">
@@ -103,7 +106,9 @@ export function Ranking<T>({ items, name, value, id, color, onSelect, icon, meta
               className="w-full space-y-1 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-muted/60"
             >
               <div className="flex items-baseline gap-2 text-xs">
-                <span className="w-4 font-mono text-[10px] text-muted-foreground">{index + 1}</span>
+                <span className="w-6 font-mono text-[10px] text-muted-foreground">
+                  {index > 0 && value(item) === value(shown[index - 1]) ? "" : rankOf(value(item), values).position}
+                </span>
                 <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
                   {icon?.(item)}
                   <span className="truncate">{name(item)}</span>

@@ -3,7 +3,7 @@
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 
 import type { Alerts, Places, Presence } from "@/lib/api";
-import { formatNumber } from "@/lib/format";
+import { count, formatDate, formatNumber } from "@/lib/format";
 import type { MapLevel } from "@/lib/filters";
 import { type Period, periodParams } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
@@ -29,10 +29,14 @@ export type MapDatum = {
   readonly iso2: string | null;
   /** Lo que codifica el color y ordena el ranking. */
   readonly value: number;
-  /** La cifra, escrita: es lo que lee quien pasa el cursor o abre la ficha. */
+  /** La cifra, escrita y con su sustantivo: es lo que lee quien pasa el cursor o abre la ficha. */
   readonly headline: string;
-  /** El desglose que acompaña a la cifra, ya en palabras. */
-  readonly detail: string;
+  /** Datos que acompañan a la cifra, cada uno con su rótulo: se leen en rejilla, no en una frase. */
+  readonly facts: readonly { readonly label: string; readonly value: string }[];
+  /** Partes de la cifra que no se suman entre sí sino que la componen: se dibujan como barra. */
+  readonly split?: readonly { readonly label: string; readonly value: number; readonly color: string }[];
+  /** Nombres que la cifra cuenta, como los grupos de un municipio. */
+  readonly tags?: readonly string[];
   readonly trace: { readonly doc_id: string; readonly chunk_id: string };
   readonly geometry: unknown;
 };
@@ -164,11 +168,15 @@ export function useMapLayer(
         name: feature.properties.name,
         iso2: feature.properties.iso2 ?? null,
         value: feature.properties.alerts,
-        headline: `${formatNumber(feature.properties.alerts)} alertas`,
-        detail:
-          `${feature.properties.imminent} de riesgo inminente · ` +
-          `${feature.properties.structural} estructural` +
-          (feature.properties.latest ? ` · la última, ${feature.properties.latest}` : ""),
+        headline: count(feature.properties.alerts, "alerta", "alertas"),
+        // Mismo rojo y mismo ámbar que la franja temporal y el conmutador de la barra.
+        split: [
+          { label: "Riesgo inminente", value: feature.properties.imminent, color: "#f87171" },
+          { label: "Riesgo estructural", value: feature.properties.structural, color: "var(--f3)" },
+        ],
+        facts: feature.properties.latest
+          ? [{ label: "La más reciente", value: formatDate(feature.properties.latest) }]
+          : [],
         trace: feature.properties.trace,
         geometry: feature.geometry,
       }),
@@ -219,13 +227,12 @@ export function useMapLayer(
           region: `${feature.properties.admin1}, ${feature.properties.country}`,
           iso2: null,
           value: feature.properties.groups.length,
-          headline: `${feature.properties.groups.length} grupos`,
-          detail:
-            `${feature.properties.admin1}, ${feature.properties.country}` +
-            (feature.properties.population
-              ? ` · ${formatNumber(feature.properties.population)} habitantes`
-              : "") +
-            ` · ${feature.properties.groups.join(", ")}`,
+          headline: count(feature.properties.groups.length, "grupo armado", "grupos armados"),
+          facts: feature.properties.population
+            ? [{ label: "Habitantes", value: formatNumber(feature.properties.population) }]
+            : [],
+          // «Otros» son los grupos que la fuente no nombra aparte, igual que en la barra lateral.
+          tags: feature.properties.groups.map((group) => (group === "Otros" ? "Otros grupos" : group)),
           trace: feature.properties.trace,
           geometry: feature.geometry,
         }),
@@ -272,8 +279,8 @@ export function useMapLayer(
       name: feature.properties.name,
       iso2: feature.properties.iso2 ?? null,
       value: feature.properties.documents,
-      headline: `${formatNumber(feature.properties.documents)} documentos`,
-      detail: `${formatNumber(feature.properties.mentions)} menciones en el corpus`,
+      headline: count(feature.properties.documents, "documento", "documentos"),
+      facts: [{ label: "Menciones", value: formatNumber(feature.properties.mentions) }],
       trace: feature.properties.trace,
       geometry: feature.geometry,
     }),

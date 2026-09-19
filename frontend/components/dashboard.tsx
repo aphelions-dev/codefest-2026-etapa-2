@@ -11,6 +11,7 @@ import type { Activation } from "@/components/registry";
 import { SIDEBAR_OPEN, SIDEBAR_RAIL, Sidebar } from "@/components/sidebar";
 import { TimelineStrip } from "@/components/timeline-strip";
 import { AgentUnavailable, ask } from "@/lib/agent";
+import { rankOf } from "@/lib/format";
 import { useEntity, useMapLevel, usePhenomenon } from "@/lib/filters";
 import { isActive, periodLabel, usePeriod } from "@/lib/period";
 import {
@@ -129,11 +130,9 @@ export function Dashboard() {
     }
   };
 
-  const rankOf = (place: MapDatum | null) => {
-    if (!place) return null;
-    const index = layer.data.findIndex((datum) => datum.id === place.id);
-    return index < 0 ? null : index;
-  };
+  const values = layer.data.map((datum) => datum.value);
+  const rankOfPlace = (place: MapDatum | null) =>
+    place && layer.data.some((datum) => datum.id === place.id) ? rankOf(place.value, values) : null;
 
   const onAsk = async (question: string) => {
     setPending(true);
@@ -173,7 +172,7 @@ export function Dashboard() {
         onSelect={setSelected}
         periodNote={periodNote}
         phenomenon={phenomenon}
-        rankOf={rankOf}
+        rankOf={rankOfPlace}
         rightInset={chatWidth}
         selected={selected}
         view={view}

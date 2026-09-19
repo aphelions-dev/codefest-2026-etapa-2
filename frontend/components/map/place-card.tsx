@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDownIcon, ChevronUpIcon, InfoIcon, XIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronUpIcon, InfoIcon, MousePointerClickIcon, XIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Flag } from "@/components/flag";
@@ -9,9 +9,12 @@ import { chunkLabel } from "@/components/highlight";
 import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { rankLabel } from "@/lib/format";
+import { formatNumber, type Rank, rankLabel } from "@/lib/format";
 import type { MapDatum, MapGuide } from "@/lib/map-layers";
 import { cn } from "@/lib/utils";
+
+// Cuántas etiquetas se enseñan antes de resumir el resto en "+N".
+const TAGS = 4;
 
 /**
  * Qué se está viendo en el mapa. Sin territorio elegido explica la vista; con uno, resume sus
@@ -24,6 +27,7 @@ export function PlaceCard({
   place,
   rank,
   total,
+  max,
   collapsed,
   onToggle,
   onClose,
@@ -33,9 +37,10 @@ export function PlaceCard({
   readonly color: string;
   readonly legend: ReactNode;
   readonly place: MapDatum | null;
-  /** Puesto del territorio elegido dentro de la lista, empezando en 0. */
-  readonly rank: number | null;
+  readonly rank: Rank | null;
   readonly total: number;
+  /** La cifra más alta de la capa: la barra de la ficha se mide contra ella. */
+  readonly max: number;
   readonly collapsed: boolean;
   readonly onToggle: () => void;
   readonly onClose: () => void;
@@ -67,15 +72,19 @@ export function PlaceCard({
   return (
     <section
       aria-label="Foco del mapa"
-      className={cn(GLASS, "border-border/60 w-full space-y-2 rounded-xl border p-2.5 shadow-xl shadow-black/40")}
+      className={cn(GLASS, "border-border/60 w-full space-y-2.5 rounded-xl border p-3 shadow-xl shadow-black/40")}
     >
-      <header className="flex items-center gap-1.5">
-        {dot}
-        {place ? <Flag code={place.iso2} /> : null}
-        <h2 className="min-w-0 flex-1 truncate text-[13px] font-semibold">{place?.name ?? guide.title}</h2>
-        {place && rank !== null ? (
-          <span className="text-muted-foreground shrink-0 font-mono text-[10px]">{rankLabel(rank, total)}</span>
-        ) : null}
+      <header className="flex items-start gap-1.5">
+        <span className="mt-1.5">{dot}</span>
+        <div className="min-w-0 flex-1">
+          {place ? (
+            <PlaceTitle place={place} />
+          ) : (
+            <h2 className="truncate text-[13px] font-semibold" title={guide.title}>
+              {guide.title}
+            </h2>
+          )}
+        </div>
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -99,24 +108,20 @@ export function PlaceCard({
       </header>
 
       {place ? (
-        <div className="space-y-0.5 pl-3.5">
-          <div className="text-muted-foreground truncate text-[10px]">{guide.title}</div>
-          <div className="font-mono text-[15px] font-semibold" style={{ color }}>
-            {place.headline}
-          </div>
-          <div className="text-muted-foreground text-[11px] leading-snug">{place.detail}</div>
+        <>
+          <PlaceSummary color={color} max={max} place={place} rank={rank} total={total} unit={guide.title} />
           {/* La cifra lleva a un fragmento real, que es lo que la hace verificable. Se dice que es
               uno de muestra y dónde está el resto, para que no se lea como toda la evidencia. */}
-          <div className="text-muted-foreground pt-1 text-[11px] leading-snug">
-            {guide.sample}:{" "}
+          <div className="border-border/60 space-y-0.5 border-t pt-2 text-[11px] leading-snug">
+            <div className="text-muted-foreground">{guide.sample}</div>
             <DocumentLink chunkId={place.trace.chunk_id} docId={place.trace.doc_id}>
               {place.trace.doc_id} · {chunkLabel(place.trace.chunk_id)}
             </DocumentLink>
             {guide.more ? <div className="text-muted-foreground/80 text-[10px]">← {guide.more}</div> : null}
           </div>
-        </div>
+        </>
       ) : (
-        <p className="text-muted-foreground pl-3.5 text-[11px] leading-snug">{guide.measures}</p>
+        <p className="text-muted-foreground text-[11px] leading-snug">{guide.measures}</p>
       )}
 
       {legend}
@@ -130,39 +135,156 @@ export function PlaceCard({
   );
 }
 
-/** Lo que dice el mapa bajo el cursor, sin tener que hacer clic. */
+/** Bandera, nombre y dónde está: lo mismo en la ficha y en el popup. */
+function PlaceTitle({ place }: { readonly place: MapDatum }) {
+  return (
+    <>
+      <div className="flex min-w-0 items-center gap-1.5">
+        <Flag code={place.iso2} />
+        <h2 className="truncate text-[13px] leading-tight font-semibold">{place.name}</h2>
+      </div>
+      {place.region ? <div className="text-muted-foreground truncate text-[11px]">{place.region}</div> : null}
+    </>
+  );
+}
+
+/**
+ * La cifra de un territorio con su contexto: cuánto es frente al que más tiene, en qué puesto queda,
+ * de qué se compone y qué nombra. Cada dato con su rótulo, en vez de todo en una frase.
+ */
+function PlaceSummary({
+  place,
+  color,
+  max,
+  rank,
+  total,
+  unit,
+}: {
+  readonly place: MapDatum;
+  readonly color: string;
+  readonly max: number;
+  readonly rank: Rank | null;
+  readonly total: number;
+  readonly unit: string;
+}) {
+  const parts = place.split?.filter((part) => part.value > 0) ?? [];
+  const whole = parts.reduce((sum, part) => sum + part.value, 0);
+  const shown = place.tags?.slice(0, TAGS) ?? [];
+  const hidden = (place.tags?.length ?? 0) - shown.length;
+
+  return (
+    <div className="space-y-2">
+      <div className="space-y-1">
+        <div className="text-[15px] leading-tight font-semibold tabular-nums" style={{ color }}>
+          {place.headline}
+        </div>
+        {/* La cifra frente a la mayor de la capa: el puesto dice el orden, la barra la distancia. */}
+        <div aria-hidden className="bg-muted h-1 overflow-hidden rounded-full" title={unit}>
+          <div className="h-full rounded-full" style={{ width: `${(place.value / Math.max(max, 1)) * 100}%`, backgroundColor: color }} />
+        </div>
+        {rank ? <div className="text-muted-foreground text-[10px] tabular-nums">{rankLabel(rank, total)}</div> : null}
+      </div>
+
+      {parts.length > 0 ? (
+        <div className="space-y-1">
+          <div aria-hidden className="flex h-1.5 overflow-hidden rounded-full">
+            {parts.map((part) => (
+              <div key={part.label} style={{ width: `${(part.value / whole) * 100}%`, backgroundColor: part.color }} />
+            ))}
+          </div>
+          <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+            {parts.map((part) => (
+              <li className="text-muted-foreground flex items-center gap-1" key={part.label}>
+                <span className="size-1.5 rounded-full" style={{ backgroundColor: part.color }} />
+                {part.label}
+                <span className="text-foreground font-medium tabular-nums">{formatNumber(part.value)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {place.facts.length > 0 ? (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px]">
+          {place.facts.map((fact) => (
+            <div className="contents" key={fact.label}>
+              <dt className="text-muted-foreground">{fact.label}</dt>
+              <dd className="text-right font-medium tabular-nums">{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
+      {shown.length > 0 ? (
+        <ul className="flex flex-wrap gap-1 text-[10px]">
+          {shown.map((tag) => (
+            <li className="border-f3/40 bg-f3/10 rounded-md border px-1.5 py-0.5" key={tag}>
+              {tag}
+            </li>
+          ))}
+          {hidden > 0 ? (
+            <li className="text-muted-foreground px-1 py-0.5" title={place.tags?.slice(TAGS).join(", ")}>
+              +{hidden}
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+// Ancho del popup y distancia al cursor: con ellos se decide si cabe arriba o hay que darle la vuelta.
+const HOVER_WIDTH = 256;
+const HOVER_GAP = 14;
+const HOVER_ROOM = 190;
+
+/**
+ * Lo que dice el mapa bajo el cursor, sin tener que hacer clic. Se abre encima del cursor y, si no
+ * cabe —pegado al borde superior o a un lateral del hueco—, debajo o hacia dentro.
+ */
 export function HoverCard({
   place,
   rank,
   total,
+  max,
+  color,
   x,
   y,
+  width,
 }: {
   readonly place: MapDatum;
-  readonly rank: number | null;
+  readonly rank: Rank | null;
   readonly total: number;
+  readonly max: number;
+  readonly color: string;
   readonly x: number;
   readonly y: number;
+  /** Ancho del hueco visible del mapa, para no salirse por los lados. */
+  readonly width: number;
 }) {
+  const below = y < HOVER_ROOM;
+  const left = Math.min(Math.max(x, HOVER_WIDTH / 2 + 8), width - HOVER_WIDTH / 2 - 8);
+
   return (
     <div
       className={cn(
         GLASS,
-        "border-border/60 pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-[calc(100%+14px)] rounded-lg border px-2.5 py-1.5 shadow-lg",
+        "border-border/60 pointer-events-none absolute z-20 space-y-2 rounded-xl border p-3 shadow-xl shadow-black/50",
+        "animate-in fade-in-0 zoom-in-95 duration-100",
       )}
-      style={{ left: x, top: y }}
+      style={{
+        left,
+        top: below ? y + HOVER_GAP : y - HOVER_GAP,
+        width: HOVER_WIDTH,
+        translate: below ? "-50% 0" : "-50% -100%",
+      }}
     >
-      <div className="flex items-center gap-1.5">
-        <Flag code={place.iso2} />
-        <span className="text-[13px] font-medium">{place.name}</span>
-        {rank !== null ? (
-          <span className="text-muted-foreground font-mono text-[10px]">{rankLabel(rank, total)}</span>
-        ) : null}
+      <PlaceTitle place={place} />
+      <PlaceSummary color={color} max={max} place={place} rank={rank} total={total} unit="" />
+      <div className="text-muted-foreground/80 flex items-center gap-1 text-[10px]">
+        <MousePointerClickIcon className="size-3" />
+        Clic para fijarlo y ver su evidencia
       </div>
-      <div className="text-muted-foreground text-[11px]">
-        {place.headline} · {place.detail}
-      </div>
-      <div className="text-muted-foreground text-[10px]">Clic para fijarlo y ver su evidencia</div>
     </div>
   );
 }

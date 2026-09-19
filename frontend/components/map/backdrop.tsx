@@ -15,6 +15,7 @@ import { GradientLegend } from "@/components/map/panel";
 import { HoverCard, PlaceCard } from "@/components/map/place-card";
 import { Map, MapControls, type MapViewport } from "@/components/ui/map";
 import { type MapLevel, phenomenonRamp } from "@/lib/filters";
+import type { Rank } from "@/lib/format";
 import type { MapDatum, MapGuide, MapView } from "@/lib/map-layers";
 
 // El corpus habla de todo el mundo en F1 y F2, y de Colombia en F3. El centro va desplazado al
@@ -77,7 +78,7 @@ export function MapBackdrop({
   readonly level: MapLevel;
   readonly selected: Selection | null;
   readonly onSelect: (selection: Selection | null) => void;
-  readonly rankOf: (place: MapDatum | null) => number | null;
+  readonly rankOf: (place: MapDatum | null) => Rank | null;
   /** Lo que ocupan la barra lateral, el analista y la franja temporal: el hueco visible del mapa. */
   readonly leftInset: number;
   readonly rightInset: number;
@@ -121,6 +122,7 @@ export function MapBackdrop({
   const steps = view === "grupos" ? [1, 2, 3, 4] : [...breaks];
   const zoom = world ? FIT_ZOOM.country : FIT_ZOOM.department;
   const start = carry?.level === level ? carry.camera : null;
+  const max = Math.max(...data.map((datum) => datum.value), 1);
 
   const onViewport = (viewport: MapViewport) => {
     if (view !== "documentos" || switching.current) return;
@@ -210,9 +212,12 @@ export function MapBackdrop({
 
         {hovered ? (
           <HoverCard
+            color={ramp[2]}
+            max={max}
             place={hovered.place}
             rank={rankOf(hovered.place)}
             total={data.length}
+            width={window.innerWidth - leftInset - rightInset}
             x={hovered.x - leftInset}
             y={hovered.y}
           />
@@ -230,6 +235,7 @@ export function MapBackdrop({
             onToggle={() => setCollapsed((open) => !open)}
             periodNote={periodNote}
             place={selected?.place ?? null}
+            max={max}
             rank={rankOf(selected?.place ?? null)}
             total={data.length}
           />
