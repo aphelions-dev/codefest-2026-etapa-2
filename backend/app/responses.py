@@ -3,7 +3,7 @@ import json
 """Modelos de respuesta. Son la unica fuente del contrato: los tipos del frontend se generan de
 aqui por OpenAPI, asi que nada se escribe a mano dos veces."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Trace(BaseModel):
@@ -134,3 +134,77 @@ class Timeline(BaseModel):
     dated_documents: int
     total_documents: int
     points: list[TimelinePoint]
+
+
+# --- Contrato del asistente conversacional (Reto 1) ---------------------------------------------
+# Los nombres de campo van en espanol porque los fija la especificacion de la organizacion, que
+# manda sobre la regla de identificadores en ingles del proyecto. `strict` en todos: es imposible
+# entregar un JSON malformado o con un campo de mas.
+
+
+class ChatRequest(BaseModel):
+    """La pregunta del usuario. `input` es lo que manda el frontend de chat ya construido."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    input: str = Field(min_length=1, max_length=4000)
+
+
+class ToolCall(BaseModel):
+    """Una herramienta invocada. El tablero deduce de `name` que componente activar."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    input_parameters: dict = Field(default_factory=dict)
+    output: str
+
+
+class Evaluation(BaseModel):
+    """Lo que la organizacion mide: relevancia, fidelidad y trazabilidad de la respuesta."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    input: str
+    actual_output: str
+    # Solo aparece si hubo recuperacion: es lo que exige la especificacion.
+    retrieval_context: list[str] | None = None
+    tools_called: list[ToolCall] = Field(default_factory=list)
+
+
+class Tokens(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    input: int
+    output: int
+    total: int
+
+
+class AgentTokens(Tokens):
+    """El gasto de una capa. Sumados dan `metadata.tokens`, nunca solo el del orquestador."""
+
+    agente: str
+    modelo: str
+
+
+class Metadata(BaseModel):
+    """El coste y el recorrido de la respuesta. `num_interacciones` son llamadas a modelo."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    num_interacciones: int
+    agentes_invocados: list[str]
+    tokens: Tokens
+    tokens_por_agente: list[AgentTokens]
+    latencia_ms: int
+    estado: str
+
+
+class ChatResponse(BaseModel):
+    """La respuesta del endpoint, con la estructura exacta que exige la especificacion."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    respuesta: str
+    evaluacion: Evaluation
+    metadata: Metadata

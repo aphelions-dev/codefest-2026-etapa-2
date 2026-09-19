@@ -10,13 +10,34 @@ dependencies = [
     "uvicorn[standard]==0.52.4",
     "pydantic-settings==2.15.0",
     "asyncpg==0.31.0",
+    "pgvector==0.5.0",
+    "httpx==0.28.1",
+    "langgraph==1.2.11",
+    "numpy==2.5.2",
+    "sentence-transformers==5.7.0",
+    # Directa para que [tool.uv.sources] aplique: uv ignora las fuentes de dependencias transitivas.
+    "torch==2.14.0",
 ]
 
 [dependency-groups]
-dev = []
+dev = ["pytest==9.1.1", "pytest-asyncio==1.4.0"]
 
 [tool.uv]
 default-groups = []
+
+# En Linux (la imagen de Coolify) PyPI sirve torch con CUDA, varios GB que aqui no se usan.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+# `app` y `tests` se importan desde la raiz del backend, sin instalar el paquete.
+pythonpath = ["."]
 
 [build-system]
 requires = ["hatchling"]
