@@ -13,13 +13,13 @@ import {
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion } from "@/components/ai-elements/suggestion";
-import { AgentPending, AgentStatus, AgentTrace, AnswerSources } from "@/components/agent-trace";
+import { AgentLive, AgentStatus, AgentTrace, AnswerSources } from "@/components/agent-trace";
 import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
 import { type Activation, TOOLS } from "@/components/registry";
 import { DocumentLink } from "@/components/document-view";
 import { SurfaceLink } from "@/components/surface-link";
-import { type AgentRun, type Cost, linkCitations, parseCitation, type Source } from "@/lib/agent";
+import { type AgentRun, type Cost, linkCitations, parseCitation, type Progress, type Source } from "@/lib/agent";
 import { cn } from "@/lib/utils";
 import type { ComponentProps } from "react";
 
@@ -79,6 +79,8 @@ export function ChatPanel({
   onToggle,
   subtitle = "Pregunta y el radar se reorganiza",
   standalone = false,
+  live = [],
+  asking = null,
 }: {
   readonly turns: readonly Turn[];
   readonly pending: boolean;
@@ -89,6 +91,10 @@ export function ChatPanel({
   readonly subtitle?: string;
   /** A solas no hay tablero: los componentes que activó la respuesta no se enseñan. */
   readonly standalone?: boolean;
+  /** Los nodos del grafo que ya terminaron en la pregunta en curso, en vivo. */
+  readonly live?: readonly Progress[];
+  /** La pregunta que se está respondiendo: se ve en el hilo desde que se envía. */
+  readonly asking?: string | null;
 }) {
   // Plegado, todo el riel abre el analista: no hace falta atinar al icono.
   if (collapsed) {
@@ -158,7 +164,13 @@ export function ChatPanel({
             ))
           )}
           {/* Mientras trabajan: la cadena de agentes que va a recorrer la pregunta. */}
-          {pending ? <AgentPending /> : null}
+          {/* La pregunta en curso, desde que se envía, y cada nodo en cuanto termina. */}
+          {pending && asking ? (
+            <Message from="user">
+              <MessageContent className="text-[13px]">{asking}</MessageContent>
+            </Message>
+          ) : null}
+          {pending ? <AgentLive steps={live} /> : null}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>

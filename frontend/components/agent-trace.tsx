@@ -5,9 +5,11 @@ import {
   BookOpenTextIcon,
   BrainIcon,
   ChartAreaIcon,
+  ChartColumnIcon,
   ChevronDownIcon,
   CircleAlertIcon,
   CircleCheckIcon,
+  LoaderCircleIcon,
   type LucideIcon,
   RouteIcon,
   ShieldCheckIcon,
@@ -18,7 +20,7 @@ import { useState } from "react";
 import { DocumentLink } from "@/components/document-view";
 import { chunkLabel } from "@/components/highlight";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import type { AgentRun, Cost, Source, ToolRun } from "@/lib/agent";
+import type { AgentRun, Cost, Progress, Source, ToolRun } from "@/lib/agent";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -62,7 +64,7 @@ const seconds = (ms?: number) => (ms === undefined ? undefined : `${(ms / 1000).
 
 /** El resultado de una herramienta en pocas palabras; el completo queda en el título. */
 function outcome(tool: ToolRun): string {
-  if (tool.name === "route_intent") return tool.output === "corpus" ? "corpus" : "directa";
+  if (tool.name === "route_intent") return ROUTE_LABEL[tool.output] ?? tool.output;
   if (tool.name === "filter_input") return tool.output === tool.input.message ? "sin cambios" : "saneada";
   if (tool.name === "decompose_query") return `«${tool.output}»`;
   if (tool.name === "extract_fragments") return `${String(tool.input.threshold ?? "")} → ${tool.output.split(" ")[0]}`;
@@ -243,30 +245,79 @@ export function AgentStatus({ status }: { readonly status: string }) {
   );
 }
 
+/** Los nodos del grafo, en el orden en que se leen, con la ruta que los recorre. */
+const STAGES: readonly {
+  readonly node: string;
+  readonly label: string;
+  readonly icon: LucideIcon;
+  /** Las rutas del orquestador en las que corre; sin ella, en todas. */
+  readonly routes?: readonly string[];
+}[] = [
+  { node: "input_guardrail", label: "Guardián de entrada", icon: ShieldCheckIcon },
+  { node: "orchestrator", label: "Orquestador", icon: RouteIcon },
+  { node: "retrieve", label: "Búsqueda en el corpus", icon: BookOpenTextIcon, routes: ["text", "both"] },
+  { node: "visualize", label: "Visualizador", icon: ChartColumnIcon, routes: ["visualization", "both"] },
+  { node: "write", label: "Redacción", icon: BookOpenTextIcon },
+  { node: "verify", label: "Verificación", icon: BadgeCheckIcon, routes: ["text", "both"] },
+  { node: "output_guardrail", label: "Guardián de salida", icon: ShieldHalfIcon },
+];
+
 /**
- * Mientras el agente trabaja. No hay streaming, así que no se finge en qué paso va: se enseña la
- * cadena que va a recorrer, con un pulso que dice que está en marcha.
+ * Mientras el agente trabaja, lo que de verdad está pasando: cada nodo se marca en cuanto el backend
+ * dice que terminó, con lo que devolvieron sus herramientas. Cuando el orquestador decide la ruta,
+ * desaparecen los pasos que esa ruta no recorre; con la ruta doble, búsqueda y visualizador corren a
+ * la vez y los dos quedan en curso. Nada se simula: sin evento no hay avance.
  */
-export function AgentPending() {
+export function AgentLive({ steps }: { readonly steps: readonly Progress[] }) {
+  const done = new Map(steps.map((step) => [step.node, step]));
+  const route = done.get("orchestrator")?.tools.find((tool) => tool.name === "route_intent")?.output;
+  const retries = steps.filter((step) => step.node === "rewrite").length;
+  const stages = STAGES.filter((stage) => !route || !stage.routes || stage.routes.includes(route));
+  // En curso: lo que falta y ya puede correr. La búsqueda y el visualizador, a la vez.
+  const pending = stages.filter((stage) => !done.has(stage.node));
+  const parallel = new Set(["retrieve", "visualize"]);
+  const active = new Set(
+    pending[0] && parallel.has(pending[0].node)
+      ? pending.filter((stage) => parallel.has(stage.node)).map((stage) => stage.node)
+      : pending.slice(0, 1).map((stage) => stage.node),
+  );
+
   return (
-    <div className="border-border/60 bg-card/40 space-y-2 rounded-lg border px-2.5 py-2" role="status">
+    <div aria-live="polite" className="border-border/60 bg-card/40 space-y-1.5 rounded-lg border px-2.5 py-2" role="status">
       <div className="flex items-center gap-2 text-[12px]">
         <span className="relative flex size-2">
           <span className="bg-primary absolute inline-flex size-full animate-ping rounded-full opacity-60" />
           <span className="bg-primary relative inline-flex size-2 rounded-full" />
         </span>
-        Los agentes están trabajando…
+        Razonando en vivo
+        {route ? <span className="text-muted-foreground text-[10px]">· ruta {ROUTE_LABEL[route] ?? route}</span> : null}
+        {retries > 0 ? <span className="text-f3 text-[10px]">· reintento {retries}</span> : null}
       </div>
-      <ol className="text-muted-foreground flex flex-wrap items-center gap-1 text-[10px]">
-        {Object.entries(AGENTS).map(([id, meta], index) => {
-          const Icon = meta.icon;
+      <ol className="space-y-1">
+        {stages.map((stage) => {
+          const step = done.get(stage.node);
+          const state = step ? "done" : active.has(stage.node) ? "active" : "pending";
+          const Icon = stage.icon;
           return (
-            <li className="flex items-center gap-1" key={id}>
-              {index > 0 ? <span aria-hidden>→</span> : null}
-              <span className="border-border/60 flex items-center gap-1 rounded-full border px-1.5 py-0.5">
-                <Icon className="size-3" />
-                {meta.name}
+            <li
+              className={cn("flex items-center gap-2 text-[11px] transition-opacity duration-300", state === "pending" && "opacity-40")}
+              key={stage.node}
+            >
+              {state === "done" ? (
+                <CircleCheckIcon className="size-3.5 shrink-0 text-emerald-400/80" />
+              ) : state === "active" ? (
+                <LoaderCircleIcon className="text-primary size-3.5 shrink-0 animate-spin" />
+              ) : (
+                <Icon className="text-muted-foreground size-3.5 shrink-0" />
+              )}
+              <span className={cn("shrink-0", state === "active" ? "text-foreground" : "text-muted-foreground")}>
+                {stage.label}
               </span>
+              {step && step.tools.length > 0 ? (
+                <span className="text-muted-foreground min-w-0 truncate text-[10px]">
+                  · {step.tools.map((tool) => `${TOOL_LABEL[tool.name] ?? tool.name} ${outcome(tool)}`).join(" · ")}
+                </span>
+              ) : null}
             </li>
           );
         })}
@@ -274,3 +325,5 @@ export function AgentPending() {
     </div>
   );
 }
+
+const ROUTE_LABEL: Record<string, string> = { text: "texto", visualization: "visual", both: "texto y visual" };

@@ -130,9 +130,86 @@ function isTool(name: string): name is ToolName {
 
 /** Pregunta al agente y traduce su respuesta a agentes, fuentes, componentes y coste. */
 export async function ask(question: string): Promise<Answer> {
+  const response = await post("/chat", question);
+  return interpret((await response.json()) as AgentResponse);
+}
+
+/** Un nodo del grafo que acaba de terminar, tal como lo emite `POST /chat/stream`. */
+export type Progress = {
+  readonly node: string;
+  readonly agents: readonly string[];
+  readonly tools: readonly ToolRun[];
+  readonly tokens: readonly { readonly agente: string; readonly modelo: string; readonly total: number }[];
+};
+
+type ApiTool = { readonly name: string; readonly input_parameters?: Record<string, unknown>; readonly output?: unknown };
+
+/**
+ * La misma pregunta, en vivo: `onStep` recibe cada nodo del grafo en cuanto termina. Devuelve la
+ * misma respuesta que `ask`. Si el backend no tiene el endpoint en vivo —uno anterior, o el rato en
+ * que el tablero se despliega antes que el agente—, pregunta a `/chat` y se pierde solo el progreso.
+ */
+export async function askStream(question: string, onStep: (step: Progress) => void): Promise<Answer> {
   let response: Response;
   try {
-    response = await fetch(new URL("/chat", API_URL), {
+    response = await post("/chat/stream", question);
+  } catch (error) {
+    if (error instanceof EndpointMissing) return ask(question);
+    throw error;
+  }
+  if (!response.body) return ask(question);
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  let result: AgentResponse | null = null;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    // Un evento SSE termina en una línea vacía; lo que queda detrás es el principio del siguiente.
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? "";
+    for (const raw of events) {
+      const name = /^event: (.+)$/m.exec(raw)?.[1];
+      const data = /^data: (.+)$/m.exec(raw)?.[1];
+      if (!name || !data) continue;
+      if (name === "step") {
+        const step = JSON.parse(data) as Omit<Progress, "tools"> & { tools: readonly ApiTool[] };
+        onStep({ ...step, tools: step.tools.map(toolRun) });
+      } else if (name === "result") {
+        result = JSON.parse(data) as AgentResponse;
+      }
+    }
+  }
+  if (!result) throw new AgentUnavailable("La respuesta del agente se cortó antes de terminar.");
+  return interpret(result);
+}
+
+/** Los componentes que eligió el visualizador en un paso, como los activa el tablero. */
+export function chosenComponents(step: Progress): Activation[] {
+  return step.tools
+    .filter((tool) => TOOL_AGENT[tool.name] === "visualizer" && isTool(tool.name))
+    .map((tool) => ({
+      tool: tool.name as ToolName,
+      filters: { ...tool.input } as Record<string, string | number | undefined>,
+    }));
+}
+
+function toolRun(call: ApiTool): ToolRun {
+  return {
+    name: call.name,
+    input: call.input_parameters ?? {},
+    output: typeof call.output === "string" ? call.output : JSON.stringify(call.output ?? ""),
+  };
+}
+
+/** El backend no tiene ese endpoint: es anterior a él. */
+class EndpointMissing extends Error {}
+
+async function post(path: string, question: string): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(new URL(path, API_URL), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ input: question }),
@@ -140,14 +217,18 @@ export async function ask(question: string): Promise<Answer> {
   } catch {
     throw new AgentUnavailable("No se pudo contactar con el agente. Revisa la conexión e inténtalo de nuevo.");
   }
+  if ((response.status === 404 || response.status === 405) && path !== "/chat") throw new EndpointMissing(path);
   if (response.status === 404 || response.status === 405) {
     throw new AgentUnavailable(
       "El agente todavía no está desplegado en este endpoint. El radar y los componentes siguen sobre datos reales del corpus.",
     );
   }
   if (!response.ok) throw new AgentUnavailable(`El agente respondió con un error (${response.status}).`);
+  return response;
+}
 
-  const body = (await response.json()) as AgentResponse;
+/** Traduce la respuesta del contrato a lo que enseñan el chat y el tablero. */
+function interpret(body: AgentResponse): Answer {
   const calls = body.evaluacion?.tools_called ?? [];
   const cited = new Set((body.respuesta.match(DOC_ID) ?? []).map(canonical));
 

@@ -10,7 +10,7 @@ import { quantileBreaks } from "@/components/map/layers";
 import type { Activation } from "@/components/registry";
 import { SIDEBAR_OPEN, SIDEBAR_RAIL, Sidebar } from "@/components/sidebar";
 import { TimelineStrip } from "@/components/timeline-strip";
-import { AgentUnavailable, ask } from "@/lib/agent";
+import { AgentUnavailable, askStream, chosenComponents, type Progress } from "@/lib/agent";
 import { rankOf } from "@/lib/format";
 import { type MapLevel, useEntity, useMapLevel, usePhenomenon } from "@/lib/filters";
 import { isActive, periodLabel, usePeriod } from "@/lib/period";
@@ -56,6 +56,9 @@ export function Dashboard() {
   const [period] = usePeriod();
   const [turns, setTurns] = useState<readonly Turn[]>([]);
   const [pending, setPending] = useState(false);
+  // La pregunta en curso, en vivo: los nodos del grafo que ya terminaron.
+  const [live, setLive] = useState<readonly Progress[]>([]);
+  const [asking, setAsking] = useState<string | null>(null);
   const [activations, setActivations] = useState<readonly Activation[]>(DEFAULT_VIEW);
   // Lo elegido va atado al conjunto de territorios en que se eligió: cambiar de nivel, fenómeno,
   // entidad, capa o filtro cambia ese conjunto, y lo elegido deja de existir.
@@ -193,19 +196,33 @@ export function Dashboard() {
     setAsked(typeof filters.place === "string" ? filters.place : null);
   };
 
+  /** Lo que el agente activó reemplaza la vista: el tablero no muestra todo a la vez. */
+  const applyChosen = (chosen: readonly Activation[]) => {
+    if (chosen.length === 0) return;
+    setActivations(chosen);
+    applyMap(chosen.find((activation) => activation.tool === "get_places")?.filters);
+    // El mapa es el lienzo: si solo lo activó a él, no hay tarjeta que abrir.
+    setAnalysisOpen(chosen.some((activation) => !OUT_OF_COLUMN.has(activation.tool)));
+  };
+
   const onAsk = async (question: string) => {
     setPending(true);
+    setLive([]);
+    setAsking(question);
+    // Lo que eligió el visualizador se aplica en cuanto termina su nodo, antes que el texto: con la
+    // ruta doble corre en paralelo al analista y llega bastante antes que la redacción.
+    let applied = false;
     try {
-      const result = await ask(question);
-      const chosen = result.activations;
+      const result = await askStream(question, (step) => {
+        setLive((previous) => [...previous, step]);
+        if (step.node === "visualize") {
+          const chosen = chosenComponents(step);
+          applied = chosen.length > 0;
+          applyChosen(chosen);
+        }
+      });
       setTurns((previous) => [...previous, { question, ...result }]);
-      // Lo que el agente activó reemplaza la vista: el tablero no muestra todo a la vez.
-      if (chosen.length > 0) {
-        setActivations(chosen);
-        applyMap(chosen.find((activation) => activation.tool === "get_places")?.filters);
-        // El mapa es el lienzo: si solo lo activó a él, no hay tarjeta que abrir.
-        setAnalysisOpen(chosen.some((activation) => !OUT_OF_COLUMN.has(activation.tool)));
-      }
+      if (!applied) applyChosen(result.activations);
     } catch (error) {
       const message = error instanceof AgentUnavailable ? error.message : "El agente falló.";
       setTurns((previous) => [...previous, { question, answer: null, activations: [], error: message }]);
@@ -293,6 +310,8 @@ export function Dashboard() {
       >
         <ChatPanel
           collapsed={!chatOpen}
+          asking={asking}
+          live={live}
           onAsk={onAsk}
           onToggle={() => setChatChoice(!chatOpen)}
           pending={pending}
