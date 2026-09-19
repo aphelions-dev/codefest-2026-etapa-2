@@ -19,6 +19,7 @@ import {
 import { useState } from "react";
 
 import { Flag } from "@/components/flag";
+import { SurfaceLink } from "@/components/surface-link";
 import { IconButton } from "@/components/icon-button";
 import { GLASS, Ranking, SectionHeader } from "@/components/map/panel";
 import {
@@ -120,6 +121,8 @@ export function Sidebar({
         {open ? (
           <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">Radar Estratégico</span>
         ) : null}
+        {/* Solo aparece en el tablero desplegado: lleva al chat del asistente a solas. */}
+        {open ? <SurfaceLink to="chat" /> : null}
         <IconButton label={open ? "Plegar la barra" : "Desplegar la barra"} onClick={onToggle}>
           {open ? <PanelLeftCloseIcon className="size-4" /> : <PanelLeftOpenIcon className="size-4" />}
         </IconButton>

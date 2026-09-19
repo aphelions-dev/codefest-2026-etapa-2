@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { ChatPanel, type Turn } from "@/components/chat/panel";
+import { DocumentView } from "@/components/document-view";
 import { AgentUnavailable, ask } from "@/lib/agent";
 
 /**
@@ -32,9 +33,12 @@ export function Chat() {
       <ChatPanel
         onAsk={onAsk}
         pending={pending}
+        standalone
         subtitle="Asistente del Radar Estratégico · cada afirmación con su fuente del corpus"
         turns={turns}
       />
+      {/* Las citas y las fuentes abren el documento aquí también, no solo en el tablero. */}
+      <DocumentView />
     </main>
   );
 }

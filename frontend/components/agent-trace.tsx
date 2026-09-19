@@ -30,19 +30,19 @@ const AGENTS: Record<string, { readonly name: string; readonly role: string; rea
   output_guardrail: { name: "Guardián de salida", role: "Última revisión antes de responder", icon: ShieldHalfIcon },
 };
 
-/** Qué hace cada herramienta, en palabras. */
+/** Cada herramienta en una o dos palabras: la traza se escanea, no se lee. */
 const TOOL_LABEL: Record<string, string> = {
-  analyze_prompt_injection: "Busca intentos de inyección",
-  filter_input: "Sanea la pregunta",
-  route_intent: "Elige el camino",
-  decompose_query: "Reformula la búsqueda",
-  search_corpus: "Búsqueda semántica en el corpus",
-  extract_fragments: "Aplica el umbral de evidencia",
-  validate_traceability: "Comprueba que las citas existan",
-  validate_faithfulness: "Comprueba la fidelidad a las fuentes",
-  detect_injection: "Busca instrucciones en los fragmentos",
-  analyze_response_toxicity: "Revisa el tono",
-  detect_indirect_injection: "Busca inyección indirecta",
+  analyze_prompt_injection: "Inyección",
+  filter_input: "Saneado",
+  route_intent: "Ruta",
+  decompose_query: "Consulta",
+  search_corpus: "Búsqueda",
+  extract_fragments: "Umbral",
+  validate_traceability: "Citas",
+  validate_faithfulness: "Fidelidad",
+  detect_injection: "Fragmentos",
+  analyze_response_toxicity: "Tono",
+  detect_indirect_injection: "Inyección indirecta",
 };
 
 // Salidas que dicen que la comprobación no pasó: se marcan en ámbar en vez de con un visto.
@@ -50,27 +50,14 @@ const FAILED = /no fiel|infiel|rechaz|bloque|inyecci[oó]n detectada|t[oó]xic|n
 
 const seconds = (ms?: number) => (ms === undefined ? undefined : `${(ms / 1000).toFixed(1).replace(".", ",")} s`);
 
-/** El resultado de una herramienta, legible: la ruta en palabras, la consulta entre comillas. */
+/** El resultado de una herramienta en pocas palabras; el completo queda en el título. */
 function outcome(tool: ToolRun): string {
-  if (tool.name === "route_intent") return tool.output === "corpus" ? "buscar en el corpus" : "responder sin buscar";
-  if (tool.name === "decompose_query") return `«${tool.output}»`;
+  if (tool.name === "route_intent") return tool.output === "corpus" ? "corpus" : "directa";
   if (tool.name === "filter_input") return tool.output === tool.input.message ? "sin cambios" : "saneada";
-  return tool.output;
-}
-
-/** Los parámetros que dicen algo a quien lee: el fenómeno, cuántos fragmentos, el umbral. */
-function detail(tool: ToolRun): string | null {
-  if (tool.name === "search_corpus") {
-    const parts = [
-      tool.input.phenomenon ? `fenómeno ${String(tool.input.phenomenon)}` : "los tres fenómenos",
-      tool.input.top_k ? `los ${String(tool.input.top_k)} más cercanos` : null,
-    ];
-    return parts.filter(Boolean).join(" · ");
-  }
-  if (tool.name === "extract_fragments" && tool.input.threshold !== undefined) {
-    return `similitud mínima ${String(tool.input.threshold)}`;
-  }
-  return null;
+  if (tool.name === "decompose_query") return `«${tool.output}»`;
+  if (tool.name === "extract_fragments") return `${String(tool.input.threshold ?? "")} → ${tool.output.split(" ")[0]}`;
+  if (tool.name === "search_corpus") return tool.output.replace(" fragmentos de ", " de ").replace(" documentos", " docs");
+  return tool.output.replace(/^las (\d+) citas existen$/, "$1 ✓");
 }
 
 /**
@@ -116,9 +103,8 @@ export function AgentTrace({ agents, cost }: { readonly agents: readonly AgentRu
           {agents.map((agent, index) => {
             const meta = AGENTS[agent.id] ?? { name: agent.id, role: "", icon: CircleCheckIcon };
             const Icon = meta.icon;
-            const share = spent && agent.tokens ? Math.round((agent.tokens.total / spent) * 100) : null;
             return (
-              <li className="relative flex gap-2.5 pb-3 last:pb-0" key={agent.id}>
+              <li className="relative flex gap-2 pb-2.5 last:pb-0" key={agent.id}>
                 {/* La línea une los agentes: es una cadena, no una lista suelta. */}
                 {index < agents.length - 1 ? (
                   <span aria-hidden className="bg-border absolute top-6 bottom-0 left-[11px] w-px" />
@@ -126,40 +112,42 @@ export function AgentTrace({ agents, cost }: { readonly agents: readonly AgentRu
                 <span className="bg-muted text-primary relative z-10 grid size-6 shrink-0 place-items-center rounded-full">
                   <Icon className="size-3.5" />
                 </span>
-                <div className="min-w-0 flex-1 space-y-1 pt-0.5">
+                <div className="min-w-0 flex-1 space-y-1 pt-[3px]">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <span className="text-[12px] font-medium">{meta.name}</span>
+                    <span className="text-[12px] font-medium" title={meta.role}>{meta.name}</span>
                     {agent.model ? (
                       <span className="border-border/60 text-muted-foreground rounded border px-1 font-mono text-[9px]">
                         {agent.model}
                       </span>
                     ) : (
-                      <span className="text-muted-foreground text-[10px]">sin llamada al modelo</span>
+                      <span className="text-muted-foreground text-[10px]">sin modelo</span>
                     )}
                     {agent.tokens ? (
                       <span className="text-muted-foreground ml-auto text-[10px] tabular-nums">
-                        {formatNumber(agent.tokens.total)} tokens{share !== null ? ` · ${share} %` : ""}
+                        {formatNumber(agent.tokens.total)}
                       </span>
                     ) : null}
                   </div>
-                  {meta.role ? <p className="text-muted-foreground text-[11px] leading-snug">{meta.role}</p> : null}
                   {agent.tools.length > 0 ? (
-                    <ul className="space-y-1 pt-0.5">
+                    <ul className="flex flex-wrap gap-1">
                       {agent.tools.map((tool, at) => {
                         const failed = FAILED.test(tool.output);
-                        const extra = detail(tool);
                         return (
-                          <li className="flex items-start gap-1.5 text-[11px] leading-snug" key={`${tool.name}-${at}`}>
-                            {failed ? (
-                              <CircleAlertIcon className="text-f3 mt-px size-3 shrink-0" />
-                            ) : (
-                              <CircleCheckIcon className="mt-px size-3 shrink-0 text-emerald-400/80" />
+                          <li
+                            className={cn(
+                              "flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px]",
+                              failed ? "bg-f3/10 text-f3" : "bg-muted/60 text-muted-foreground",
                             )}
-                            <span className="min-w-0 break-words">
-                              <span className="text-foreground/85">{TOOL_LABEL[tool.name] ?? tool.name}</span>
-                              {extra ? <span className="text-muted-foreground"> ({extra})</span> : null}
-                              <span className="text-muted-foreground"> → {outcome(tool)}</span>
-                            </span>
+                            key={`${tool.name}-${at}`}
+                            title={`${tool.name}: ${tool.output}`}
+                          >
+                            {failed ? (
+                              <CircleAlertIcon className="size-2.5 shrink-0" />
+                            ) : (
+                              <CircleCheckIcon className="size-2.5 shrink-0 text-emerald-400/80" />
+                            )}
+                            <span className="text-foreground/80">{TOOL_LABEL[tool.name] ?? tool.name}</span>
+                            <span className="truncate">{outcome(tool)}</span>
                           </li>
                         );
                       })}
@@ -171,8 +159,7 @@ export function AgentTrace({ agents, cost }: { readonly agents: readonly AgentRu
           })}
         </ol>
         <p className="text-muted-foreground border-border/60 border-t px-2.5 py-1.5 text-[10px] tabular-nums">
-          {cost.interactions} llamada{cost.interactions === 1 ? "" : "s"} al modelo · {formatNumber(cost.tokens)} tokens
-          {seconds(cost.latency) ? ` · ${seconds(cost.latency)} de principio a fin` : ""}
+          {cost.interactions} llamada{cost.interactions === 1 ? "" : "s"} al modelo · tokens por agente a la derecha
         </p>
       </CollapsibleContent>
     </Collapsible>

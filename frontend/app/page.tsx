@@ -15,7 +15,16 @@ import { SURFACE } from "@/lib/env";
  * página se pueda prerenderizar.
  */
 export default function Home() {
-  if (SURFACE === "chat") return <Chat />;
+  // Las dos superficies leen la URL (el documento abierto va en ella) y usan tooltips.
+  if (SURFACE === "chat") {
+    return (
+      <TooltipProvider delayDuration={300}>
+        <Suspense fallback={<main className="grid h-dvh place-items-center text-sm">Cargando el asistente…</main>}>
+          <Chat />
+        </Suspense>
+      </TooltipProvider>
+    );
+  }
   return (
     <TooltipProvider delayDuration={300}>
       <Suspense fallback={<main className="grid h-dvh place-items-center text-sm">Cargando el radar…</main>}>

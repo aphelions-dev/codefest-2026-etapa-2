@@ -18,6 +18,7 @@ import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
 import { type Activation, TOOLS } from "@/components/registry";
 import { DocumentLink } from "@/components/document-view";
+import { SurfaceLink } from "@/components/surface-link";
 import { type AgentRun, type Cost, linkCitations, parseCitation, type Source } from "@/lib/agent";
 import { cn } from "@/lib/utils";
 import type { ComponentProps } from "react";
@@ -77,6 +78,7 @@ export function ChatPanel({
   onAsk,
   onToggle,
   subtitle = "Pregunta y el radar se reorganiza",
+  standalone = false,
 }: {
   readonly turns: readonly Turn[];
   readonly pending: boolean;
@@ -85,6 +87,8 @@ export function ChatPanel({
   readonly onToggle?: () => void;
   /** Lo que dice la cabecera: en el tablero, que el radar responde; a solas, qué es el asistente. */
   readonly subtitle?: string;
+  /** A solas no hay tablero: los componentes que activó la respuesta no se enseñan. */
+  readonly standalone?: boolean;
 }) {
   // Plegado, todo el riel abre el analista: no hace falta atinar al icono.
   if (collapsed) {
@@ -115,6 +119,8 @@ export function ChatPanel({
           <h2 className="text-[13px] leading-tight font-medium">Analista</h2>
           <p className="text-muted-foreground text-[11px] leading-snug">{subtitle}</p>
         </div>
+        {/* Solo aparece en el chat a solas: lleva al tablero, donde la pregunta activa componentes. */}
+        <SurfaceLink to="dashboard" />
         {onToggle ? (
           <IconButton label="Plegar el analista" onClick={onToggle} side="left">
             <PanelRightCloseIcon className="size-4" />
@@ -148,7 +154,7 @@ export function ChatPanel({
             </div>
           ) : (
             turns.map((turn, index) => (
-              <TurnView key={index} onAsk={onAsk} pending={pending} turn={turn} />
+              <TurnView key={index} onAsk={onAsk} pending={pending} standalone={standalone} turn={turn} />
             ))
           )}
           {/* Mientras trabajan: la cadena de agentes que va a recorrer la pregunta. */}
@@ -183,10 +189,12 @@ export function ChatPanel({
 function TurnView({
   turn,
   pending,
+  standalone,
   onAsk,
 }: {
   readonly turn: Turn;
   readonly pending: boolean;
+  readonly standalone: boolean;
   readonly onAsk: (question: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -220,7 +228,7 @@ function TurnView({
       {turn.agents && turn.cost ? <AgentTrace agents={turn.agents} cost={turn.cost} /> : null}
 
       <div className="flex flex-wrap items-center gap-1">
-        {turn.activations.length > 0 ? (
+        {!standalone && turn.activations.length > 0 ? (
           <ul aria-label="Componentes que activó" className="text-muted-foreground flex flex-wrap gap-1 text-[10px]">
             {turn.activations.map((activation) => {
               const Icon = TOOLS[activation.tool].icon;
