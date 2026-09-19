@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Path, Query
 
 from app.db import alerts as alerts_db
 from app.db import breakdown as breakdown_db
+from app.db import distribution as distribution_db
 from app.db import entities as entities_db
 from app.db import places as places_db
 from app.db import presence as presence_db
@@ -22,6 +23,7 @@ from app.params import (
     BreakdownField,
     DateFrom,
     DateTo,
+    DistributionMeasure,
     DocId,
     MatrixColumn,
     OptionalChunkId,
@@ -36,6 +38,8 @@ from app.responses import (
     AlertYear,
     Breakdown,
     BreakdownBucket,
+    Distribution,
+    DistributionBin,
     Document,
     DocumentFragment,
     Graph,
@@ -91,6 +95,68 @@ async def metadata_breakdown(
             for row in rows
         ],
     )
+
+
+@router.get("/metadata/distribution", summary="Distribucion de una medida por documento")
+async def metadata_distribution(
+    pool: Pool,
+    measure: DistributionMeasure = Query(
+        default=DistributionMeasure.fragments, description="Que se mide de cada documento"
+    ),
+    phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+    date_from: DateFrom = None,
+    date_to: DateTo = None,
+) -> Distribution:
+    """Alimenta el histograma: como se reparten la longitud o las entidades de los documentos."""
+    value = phenomenon.value if phenomenon else None
+    rows = await distribution_db.per_document(pool, measure.value, value, date_from, date_to)
+    values = sorted(row["value"] for row in rows)
+    return Distribution(
+        measure=measure.value,
+        phenomenon=value,
+        date_from=date_from,
+        date_to=date_to,
+        documents=len(rows),
+        quartiles=[_percentile(values, q) for q in (0.25, 0.5, 0.75)] if values else [],
+        bins=_bins(rows),
+    )
+
+
+def _percentile(values: list[int], q: float) -> int:
+    """Percentil por posicion, sobre valores ya ordenados: un valor que existe, no interpolado."""
+    return values[min(len(values) - 1, int(q * len(values)))]
+
+
+def _bins(rows) -> list[DistributionBin]:
+    """Tramos 0, 1, 2-3, 4-7... hasta el que contiene el maximo. Los vacios intermedios se quedan:
+    un hueco en la distribucion es informacion."""
+    if not rows:
+        return []
+    top = max(row["value"] for row in rows)
+    edges = [(0, 0)] if any(row["value"] == 0 for row in rows) else []
+    low = 1
+    while low <= top:
+        edges.append((low, low * 2 - 1))
+        low *= 2
+    bins = []
+    for index, (low, high) in enumerate(edges):
+        last = index == len(edges) - 1
+        inside = [row for row in rows if low <= row["value"] and (last or row["value"] <= high)]
+        if not inside and last:
+            continue
+        sample = max(inside, key=lambda row: row["value"]) if inside else None
+        counts = {str(p): sum(1 for row in inside if row["phenomenon"] == p) for p in (1, 2, 3)}
+        bins.append(
+            DistributionBin(
+                label=str(low) if low == high else (f"{low}+" if last else f"{low}-{high}"),
+                low=low,
+                high=None if last else high,
+                documents=len(inside),
+                by_phenomenon=counts,
+                trace=Trace(doc_id=sample["doc_id"], chunk_id=sample["first_chunk"]) if sample else None,
+            )
+        )
+    return bins
 
 
 # Fragmentos por ventana. La mayoria de los documentos cabe entero, pero los mayores pasan del

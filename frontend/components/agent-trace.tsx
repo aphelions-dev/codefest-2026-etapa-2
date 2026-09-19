@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  DatabaseZapIcon,
-  GridIcon,
-  NetworkIcon,
-  PenLineIcon,
-  SearchIcon,
-  ShieldCheckIcon,
-  TableIcon,
-} from "lucide-react";
+import { PenLineIcon } from "lucide-react";
 
 import {
   ChainOfThought,
@@ -24,16 +16,6 @@ import { TOOLS, type ToolName } from "@/components/registry";
 import type { Step } from "@/lib/agent";
 import { cn } from "@/lib/utils";
 
-const ICONS: Record<ToolName, typeof SearchIcon> = {
-  search_corpus: SearchIcon,
-  get_metadata_breakdown: DatabaseZapIcon,
-  get_entity_matrix: TableIcon,
-  get_cooccurrence: NetworkIcon,
-  get_quadrant: GridIcon,
-  get_places: DatabaseZapIcon,
-  get_timeline: DatabaseZapIcon,
-  get_document: ShieldCheckIcon,
-};
 
 const seconds = (ms?: number) => (ms === undefined ? undefined : `${(ms / 1000).toFixed(1)} s`);
 
@@ -53,7 +35,7 @@ export function AgentTrace({ steps, cost }: { readonly steps: readonly Step[]; r
       <ChainOfThoughtHeader>Cómo se respondió</ChainOfThoughtHeader>
       <ChainOfThoughtContent>
         {steps.map((step, index) => {
-          const Icon = step.tool ? ICONS[step.tool] : PenLineIcon;
+          const Icon = step.tool ? TOOLS[step.tool].icon : PenLineIcon;
           const label = step.tool ? TOOLS[step.tool].label : step.agent;
           return (
             <ChainOfThoughtStep

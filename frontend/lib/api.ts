@@ -7,6 +7,7 @@ type Get<P extends keyof paths> = paths[P] extends { get: { responses: { 200: { 
   : never;
 
 export type Breakdown = Get<"/metadata/breakdown">;
+export type Distribution = Get<"/metadata/distribution">;
 export type Matrix = Get<"/entities/matrix">;
 export type Graph = Get<"/entities/cooccurrence">;
 export type Places = Get<"/places">;

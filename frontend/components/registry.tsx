@@ -1,11 +1,24 @@
 "use client";
 
+import {
+  CalendarRangeIcon,
+  ChartBarIcon,
+  ChartColumnIcon,
+  ChartScatterIcon,
+  FileSearchIcon,
+  Grid3x3Icon,
+  type LucideIcon,
+  MapIcon,
+  NetworkIcon,
+  SearchIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Bars } from "@/components/charts/bars";
 import { Evidence } from "@/components/charts/evidence";
 import { Graph } from "@/components/charts/graph";
 import { Heatmap } from "@/components/charts/heatmap";
+import { Histogram } from "@/components/charts/histogram";
 import { Quadrant } from "@/components/charts/quadrant";
 
 /**
@@ -19,6 +32,7 @@ import { Quadrant } from "@/components/charts/quadrant";
  */
 export type ToolName =
   | "get_metadata_breakdown"
+  | "get_distribution"
   | "get_entity_matrix"
   | "get_cooccurrence"
   | "get_quadrant"
@@ -40,16 +54,20 @@ type Context = {
   readonly onEntity: (entityId: string | null) => void;
 };
 
-/** Qué tarea analítica resuelve cada herramienta, para el pie del panel y la documentación. */
-export const TOOLS: Record<ToolName, { readonly label: string; readonly task: string }> = {
-  get_metadata_breakdown: { label: "Barras", task: "comparación y composición" },
-  get_entity_matrix: { label: "Matriz de calor", task: "comparación cruzada de dos categorías" },
-  get_cooccurrence: { label: "Red de entidades", task: "relaciones" },
-  get_quadrant: { label: "Cuadrante", task: "priorización por dos criterios" },
-  get_places: { label: "Mapa", task: "distribución espacial" },
-  get_timeline: { label: "Línea de tiempo", task: "tendencia" },
-  get_document: { label: "Evidencia", task: "verificación de la fuente" },
-  search_corpus: { label: "Evidencia", task: "verificación de la fuente" },
+/**
+ * Qué tarea analítica resuelve cada herramienta y con qué icono se reconoce, para el panel, la traza
+ * del agente y la documentación: el icono dice la forma del gráfico, no la herramienta.
+ */
+export const TOOLS: Record<ToolName, { readonly label: string; readonly task: string; readonly icon: LucideIcon }> = {
+  get_metadata_breakdown: { label: "Barras", task: "comparación y composición", icon: ChartBarIcon },
+  get_distribution: { label: "Histograma", task: "distribución", icon: ChartColumnIcon },
+  get_entity_matrix: { label: "Matriz de calor", task: "comparación cruzada de dos categorías", icon: Grid3x3Icon },
+  get_cooccurrence: { label: "Red de entidades", task: "relaciones", icon: NetworkIcon },
+  get_quadrant: { label: "Cuadrante", task: "priorización por dos criterios", icon: ChartScatterIcon },
+  get_places: { label: "Mapa", task: "distribución espacial", icon: MapIcon },
+  get_timeline: { label: "Línea de tiempo", task: "tendencia", icon: CalendarRangeIcon },
+  get_document: { label: "Evidencia", task: "verificación de la fuente", icon: FileSearchIcon },
+  search_corpus: { label: "Evidencia", task: "verificación de la fuente", icon: SearchIcon },
 };
 
 export function render(activation: Activation, context: Context): ReactNode {
@@ -60,6 +78,8 @@ export function render(activation: Activation, context: Context): ReactNode {
   switch (tool) {
     case "get_metadata_breakdown":
       return <Bars by={String(filters.by ?? "observatory")} phenomenon={phenomenon} />;
+    case "get_distribution":
+      return <Histogram measure={filters.measure as string | undefined} phenomenon={phenomenon} />;
     case "get_entity_matrix":
       return (
         <Heatmap

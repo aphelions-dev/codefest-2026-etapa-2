@@ -32,6 +32,38 @@ class Breakdown(BaseModel):
     buckets: list[BreakdownBucket]
 
 
+class DistributionBin(BaseModel):
+    """Un tramo del histograma: documentos cuyo valor cae entre `low` y `high`, por fenomeno."""
+
+    label: str
+    low: int
+    # Sin techo en el ultimo tramo.
+    high: int | None = None
+    documents: int
+    # Documentos del tramo por fenomeno, con la clave "1", "2" o "3": se apilan en su color.
+    by_phenomenon: dict[str, int]
+    # El documento con el valor mas alto del tramo, en su primer fragmento. Sin el en un tramo vacio.
+    trace: Trace | None = None
+
+
+class Distribution(BaseModel):
+    """Como se reparte una medida por documento, con sus cuartiles.
+
+    Los tramos son potencias de dos: la medida tiene una cola larga (la mediana de fragmentos por
+    documento va de 1 a 8 segun el fenomeno y el p95 pasa de 100), y con tramos iguales todo caeria
+    en la primera barra.
+    """
+
+    measure: str
+    phenomenon: int | None = None
+    date_from: date | None = None
+    date_to: date | None = None
+    documents: int
+    # Percentiles 25, 50 y 75 de la medida, sobre los documentos del filtro.
+    quartiles: list[int]
+    bins: list[DistributionBin]
+
+
 class DocumentFragment(BaseModel):
     chunk_id: str
     position: int

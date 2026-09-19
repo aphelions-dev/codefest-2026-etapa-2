@@ -28,6 +28,13 @@ class BreakdownField(str, Enum):
     format = "format"
 
 
+class DistributionMeasure(str, Enum):
+    """Medidas por documento cuya distribucion se puede pedir."""
+
+    fragments = "fragments"
+    entities = "entities"
+
+
 class MatrixColumn(str, Enum):
     """Segunda categoria de la matriz de calor."""
 

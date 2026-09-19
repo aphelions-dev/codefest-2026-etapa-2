@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/metadata/distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Distribucion de una medida por documento
+         * @description Alimenta el histograma: como se reparten la longitud o las entidades de los documentos.
+         */
+        get: operations["metadata_distribution_metadata_distribution_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/documents/{doc_id}": {
         parameters: {
             query?: never;
@@ -440,6 +460,55 @@ export interface components {
             evaluacion: components["schemas"]["Evaluation"];
             metadata: components["schemas"]["Metadata"];
         };
+        /**
+         * Distribution
+         * @description Como se reparte una medida por documento, con sus cuartiles.
+         *
+         *     Los tramos son potencias de dos: la medida tiene una cola larga (la mediana de fragmentos por
+         *     documento va de 1 a 8 segun el fenomeno y el p95 pasa de 100), y con tramos iguales todo caeria
+         *     en la primera barra.
+         */
+        Distribution: {
+            /** Measure */
+            measure: string;
+            /** Phenomenon */
+            phenomenon?: number | null;
+            /** Date From */
+            date_from?: string | null;
+            /** Date To */
+            date_to?: string | null;
+            /** Documents */
+            documents: number;
+            /** Quartiles */
+            quartiles: number[];
+            /** Bins */
+            bins: components["schemas"]["DistributionBin"][];
+        };
+        /**
+         * DistributionBin
+         * @description Un tramo del histograma: documentos cuyo valor cae entre `low` y `high`, por fenomeno.
+         */
+        DistributionBin: {
+            /** Label */
+            label: string;
+            /** Low */
+            low: number;
+            /** High */
+            high?: number | null;
+            /** Documents */
+            documents: number;
+            /** By Phenomenon */
+            by_phenomenon: {
+                [key: string]: number;
+            };
+            trace?: components["schemas"]["Trace"] | null;
+        };
+        /**
+         * DistributionMeasure
+         * @description Medidas por documento cuya distribucion se puede pedir.
+         * @enum {string}
+         */
+        DistributionMeasure: "fragments" | "entities";
         /**
          * Document
          * @description El texto original que sustenta una visualizacion, en una ventana de sus fragmentos.
@@ -1001,6 +1070,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Breakdown"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    metadata_distribution_metadata_distribution_get: {
+        parameters: {
+            query?: {
+                /** @description Que se mide de cada documento */
+                measure?: components["schemas"]["DistributionMeasure"];
+                /** @description Limitar a un fenomeno */
+                phenomenon?: components["schemas"]["Phenomenon"] | null;
+                /** @description Primer dia del periodo (ISO 8601); sin el, desde el principio */
+                date_from?: string | null;
+                /** @description Ultimo dia del periodo (ISO 8601); sin el, hasta el final */
+                date_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Distribution"];
                 };
             };
             /** @description Validation Error */

@@ -82,17 +82,21 @@ export function AnalysisPanel({
               <LayoutGridIcon className="text-primary size-3.5" />
               Análisis
             </span>
-            {activations.map((activation, at) => (
-              <button
-                className="hover:bg-muted text-foreground/90 shrink-0 rounded-full px-2.5 py-1 text-[11px] transition-colors"
-                key={activation.tool}
-                onClick={() => openAt(at)}
-                title={`Abrir ${TOOLS[activation.tool].label.toLowerCase()} · ${TOOLS[activation.tool].task}`}
-                type="button"
-              >
-                {TOOLS[activation.tool].label}
-              </button>
-            ))}
+            {activations.map((activation, at) => {
+              const Icon = TOOLS[activation.tool].icon;
+              return (
+                <button
+                  className="hover:bg-muted text-foreground/90 flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] transition-colors"
+                  key={activation.tool}
+                  onClick={() => openAt(at)}
+                  title={`Abrir ${TOOLS[activation.tool].label.toLowerCase()} · ${TOOLS[activation.tool].task}`}
+                  type="button"
+                >
+                  <Icon className="text-muted-foreground size-3.5" />
+                  {TOOLS[activation.tool].label}
+                </button>
+              );
+            })}
           </nav>
         </div>
       ) : null}
@@ -102,6 +106,8 @@ export function AnalysisPanel({
         <DialogContent
           className="bg-popover/95 flex flex-col gap-0 overflow-hidden p-0 shadow-2xl shadow-black/60 backdrop-blur-xl"
           onInteractOutside={(event) => event.preventDefault()}
+          // Al abrir, el foco se queda en el contenido y no pinta un anillo en la primera pestaña.
+          onOpenAutoFocus={(event) => event.preventDefault()}
           showCloseButton={false}
           style={{
             top: 12,
@@ -122,11 +128,13 @@ export function AnalysisPanel({
             {/* Una pestaña por componente activo. */}
             {activations.length > 1 ? (
               <div aria-label="Componentes" className="bg-muted/50 flex gap-0.5 rounded-lg p-0.5" role="tablist">
-                {activations.map((activation, at) => (
+                {activations.map((activation, at) => {
+                  const Icon = TOOLS[activation.tool].icon;
+                  return (
                   <button
                     aria-selected={at === index}
                     className={cn(
-                      "rounded-md px-2.5 py-1 text-[11px] transition-colors",
+                      "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] transition-colors",
                       at === index
                         ? "bg-background text-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground",
@@ -136,9 +144,11 @@ export function AnalysisPanel({
                     role="tab"
                     type="button"
                   >
+                    <Icon className="size-3.5" />
                     {TOOLS[activation.tool].label}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             ) : null}
 

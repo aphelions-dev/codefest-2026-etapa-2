@@ -40,6 +40,7 @@ const DEFAULT_VIEW: readonly Activation[] = [
   { tool: "get_entity_matrix", filters: { cols: "observatory" } },
   { tool: "get_quadrant" },
   { tool: "get_cooccurrence" },
+  { tool: "get_distribution" },
 ];
 
 // Estos dos no son tarjetas de la barra: el mapa es el lienzo y la serie temporal, la franja.
