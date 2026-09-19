@@ -170,6 +170,63 @@ class Places(BaseModel):
     features: list[PlaceFeature]
 
 
+class PresenceProperties(BaseModel):
+    """Lo que el mapa pinta de un departamento: cuantos municipios suyos registran presencia."""
+
+    place_id: str
+    name: str
+    iso2: str | None = None
+    municipalities: int
+    with_presence: int
+    without_information: int
+    groups: int
+    trace: Trace
+
+
+class PresenceFeature(BaseModel):
+    type: str = "Feature"
+    id: str
+    geometry: dict
+    properties: PresenceProperties
+
+
+class Municipality(BaseModel):
+    """El nivel en el que la fuente da el dato, con su traza al fragmento que lo sustenta."""
+
+    pcode: str
+    country: str
+    admin1: str
+    admin2: str
+    population: int | None = None
+    groups: list[str]
+    no_info: bool
+    trace: Trace
+
+
+class ArmedGroup(BaseModel):
+    name: str
+    municipalities: int
+
+
+class Presence(BaseModel):
+    """Presencia de grupos armados en la cuenca amazonica.
+
+    El mapa agrega al departamento porque es el territorio con geometria; la lista conserva el
+    municipio, que es donde la fuente mide. Un municipio sin grupos y con `no_info` es *sin
+    informacion*, no *sin presencia*, y las dos cifras van separadas por eso.
+    """
+
+    group: str | None = None
+    country: str | None = None
+    municipalities: int
+    with_presence: int
+    without_information: int
+    matching: int
+    groups: list[ArmedGroup]
+    features: list[PresenceFeature]
+    places: list[Municipality]
+
+
 class TimelinePoint(BaseModel):
     """Un ano: el total y cuanto aporto cada fuente, para apilar la barra."""
 

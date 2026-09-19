@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 from app.db import breakdown as breakdown_db
 from app.db import entities as entities_db
 from app.db import places as places_db
+from app.db import presence as presence_db
 from app.db import quadrant as quadrant_db
 from app.db import timeline as timeline_db
 from app.db import documents as documents_db
@@ -36,7 +37,12 @@ from app.responses import (
     MatrixRow,
     PlaceFeature,
     PlaceProperties,
+    ArmedGroup,
+    Municipality,
     Places,
+    Presence,
+    PresenceFeature,
+    PresenceProperties,
     Quadrant,
     QuadrantPoint,
     Timeline,
@@ -303,3 +309,64 @@ def _median(values: list[float]) -> float:
     if len(values) % 2:
         return float(values[middle])
     return (values[middle - 1] + values[middle]) / 2
+
+
+@router.get("/presence", summary="Presencia de grupos armados en la cuenca amazonica")
+async def presence(
+    pool: Pool,
+    group: str | None = Query(default=None, description="Limitar a un grupo armado"),
+    country: str | None = Query(default=None, description="Limitar la lista a un pais"),
+    limit: int = Query(default=60, ge=1, le=300, description="Cuantos municipios listar"),
+) -> Presence:
+    """Que grupos armados registra cada territorio, y en que municipios.
+
+    El dato viene por municipio, pero la geometria municipal no esta en el indice: el mapa agrega
+    al departamento y la lista conserva el municipio, que es donde la fuente mide. Es un conteo de
+    presencia declarada por la fuente, no una medida de intensidad ni un nivel de riesgo.
+    """
+    counts = await presence_db.coverage(pool, group)
+    territories = await presence_db.by_territory(pool, group)
+    places = await presence_db.municipalities(pool, group, country, limit)
+
+    return Presence(
+        group=group,
+        country=country,
+        municipalities=counts["municipalities"],
+        with_presence=counts["with_presence"],
+        without_information=counts["without_information"],
+        matching=counts["matching"],
+        groups=[
+            ArmedGroup(name=row["name"], municipalities=row["municipalities"])
+            for row in await presence_db.catalogue(pool)
+        ],
+        features=[
+            PresenceFeature(
+                id=row["place_id"],
+                geometry=json.loads(row["geometry"]),
+                properties=PresenceProperties(
+                    place_id=row["place_id"],
+                    name=row["name"],
+                    iso2=row["iso2"],
+                    municipalities=row["municipalities"],
+                    with_presence=row["with_presence"],
+                    without_information=row["without_information"],
+                    groups=row["groups"],
+                    trace=Trace(doc_id=row["sample_doc"], chunk_id=row["sample_chunk"]),
+                ),
+            )
+            for row in territories
+        ],
+        places=[
+            Municipality(
+                pcode=row["pcode"],
+                country=row["country"],
+                admin1=row["admin1"],
+                admin2=row["admin2"],
+                population=row["population"],
+                groups=list(row["groups"]),
+                no_info=row["no_info"],
+                trace=Trace(doc_id=row["doc_id"], chunk_id=row["chunk_id"]),
+            )
+            for row in places
+        ],
+    )
