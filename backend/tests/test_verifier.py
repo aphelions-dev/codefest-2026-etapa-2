@@ -93,3 +93,41 @@ async def test_la_cita_inventada_sigue_cayendo():
 
 def test_extrae_la_cita_con_espacios_dentro():
     assert verifier.cited("Algo [ F1-CSET-065 ].") == {"F1-CSET-065"}
+
+
+async def test_acepta_la_cita_con_corchetes_japoneses():
+    """Medido en produccion: gpt-oss-120b escribe U+3010 y U+3011 en vez de corchetes ASCII."""
+    client = FakeClient({"verifier": [verdict(True)]})
+    fragments = [fragment("F2-SWF-043", "texto")]
+
+    ok, reason, _, _ = await verifier.verify(
+        client, "fast-test", "Una afirmacion 【F2-SWF-043】.", fragments
+    )
+
+    assert verifier.cited("【F2-SWF-043】") == {"F2-SWF-043"}
+    assert ok is True, reason
+
+
+async def test_una_respuesta_sin_citas_se_rechaza():
+    """El conjunto vacio dejaba de ser un aprobado: es la senal de que la extraccion esta ciega."""
+    client = FakeClient({})
+    fragments = [fragment("F2-SWF-043", "texto")]
+
+    ok, reason, usage, tools = await verifier.verify(
+        client, "fast-test", "Una afirmacion sin ninguna cita.", fragments
+    )
+
+    assert ok is False
+    assert "no cita" in reason
+    # Ni una llamada a modelo: la comprobacion es de codigo.
+    assert usage == [] and client.calls == []
+    assert tools[0].output == "la respuesta no cita ninguna fuente"
+
+
+async def test_sin_evidencia_no_se_exige_cita():
+    """Cuando no hubo recuperacion no hay nada que citar, y exigirlo seria un bucle."""
+    client = FakeClient({"verifier": [verdict(True)]})
+
+    ok, reason, _, _ = await verifier.verify(client, "fast-test", "No hay evidencia.", [])
+
+    assert ok is True, reason

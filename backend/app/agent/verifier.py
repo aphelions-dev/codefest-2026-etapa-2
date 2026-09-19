@@ -27,6 +27,8 @@ CITATION = re.compile(r"\[\s*([A-Z0-9][A-Za-z0-9-]{3,})\s*\]")
 DASHES = str.maketrans({dash: "-" for dash in "‐‑‒–—―−­"})
 # Espacios que el modelo mete dentro de la cita y que no son el espacio normal.
 SPACES = str.maketrans({space: " " for space in "     "})
+# Y tampoco escribe siempre el corchete ASCII: medido en produccion, usa los de raya japoneses.
+BRACKETS = str.maketrans({"【": "[", "】": "]", "［": "[", "］": "]", "〔": "[", "〕": "]"})
 
 VERDICT_SCHEMA = {
     "type": "object",
@@ -38,7 +40,8 @@ VERDICT_SCHEMA = {
 
 def cited(answer: str) -> set[str]:
     """Los identificadores que la respuesta cita entre corchetes, ya normalizados."""
-    return set(CITATION.findall(answer.translate(DASHES).translate(SPACES)))
+    normalizada = answer.translate(DASHES).translate(SPACES).translate(BRACKETS)
+    return set(CITATION.findall(normalizada))
 
 
 def untraceable(answer: str, fragments: list[Fragment]) -> set[str]:
@@ -57,18 +60,36 @@ async def verify(
     client: Client, model: str, answer: str, fragments: list[Fragment]
 ) -> tuple[bool, str, list[Usage], list[ToolRecord]]:
     """Devuelve si la respuesta se entrega, y por que no cuando se rechaza."""
+    referencias = cited(answer)
     fabricated = untraceable(answer, fragments)
+    # Redactar sobre evidencia y no citar nada no es una respuesta valida, y ademas es la unica
+    # senal de que la extraccion se ha quedado ciega ante una forma de cita que no reconoce. Sin
+    # esta regla el conjunto vacio se lee como "ninguna cita inventada" y la comprobacion aprueba
+    # sin haber mirado nada: ha pasado ya tres veces, con el guion no separable, con los espacios
+    # dentro de los corchetes y con los corchetes japoneses. Rechazar convierte el proximo caso en
+    # un reintento visible en la traza, en vez de en una garantia apagada en silencio.
+    sin_citas = bool(fragments) and not referencias
+
+    if fabricated:
+        salida = f"citas inventadas: {sorted(fabricated)}"
+    elif sin_citas:
+        salida = "la respuesta no cita ninguna fuente"
+    else:
+        salida = f"las {len(referencias)} citas existen"
     tools = [
         ToolRecord(
             name="validate_traceability",
-            input_parameters={"answer": answer, "doc_ids": sorted(cited(answer))},
-            output="todas las citas existen" if not fabricated else f"citas inventadas: {sorted(fabricated)}",
+            input_parameters={"answer": answer, "doc_ids": sorted(referencias)},
+            output=salida,
         )
     ]
     if fabricated:
         reason = f"la respuesta cita documentos que no se recuperaron: {', '.join(sorted(fabricated))}"
         log.warning("verificacion fallida por trazabilidad", extra={"citas": sorted(fabricated)})
         return False, reason, [], tools
+    if sin_citas:
+        log.warning("verificacion fallida: ninguna cita reconocible", extra={"fragmentos": len(fragments)})
+        return False, "la respuesta no cita ninguna fuente de la evidencia", [], tools
 
     evidence = prompts.evidence_block(fragments)
     try:

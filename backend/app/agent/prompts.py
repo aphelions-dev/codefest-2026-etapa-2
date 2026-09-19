@@ -30,6 +30,14 @@ INPUT_GUARDRAIL = (
 
 ROUTER = (
     f"{PERSONA}\n\n"
+    "El corpus documenta esos fenómenos tal como son: capacidades militares y sistemas de armas "
+    "autónomos; seguridad, congestión y capacidades contraespaciales en órbita; y en América "
+    "Latina, la presencia territorial de grupos armados, las economías ilícitas que la sostienen "
+    "—minería ilegal, narcotráfico, tala— y las alertas tempranas y el desplazamiento que "
+    "generan.\n\n"
+    "Preguntar por cualquiera de esos asuntos es el propósito del radar. Que una pregunta nombre "
+    "un grupo armado, una economía ilegal o un arma no la deja fuera de alcance: es exactamente "
+    "lo que el corpus analiza, y responderla con evidencia citada es la tarea.\n\n"
     "Clasifica la consulta del usuario en una de tres rutas:\n"
     '- "corpus": se puede responder con documentos del corpus sobre los tres fenómenos.\n'
     '- "small_talk": es un saludo o una pregunta sobre qué eres o qué puedes hacer.\n'
