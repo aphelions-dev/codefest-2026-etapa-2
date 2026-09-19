@@ -16,9 +16,10 @@ import {
 
 import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
-import type { Timeline as TimelineData } from "@/lib/api";
+import type { Alerts, Timeline as TimelineData } from "@/lib/api";
 import { formatNumber } from "@/lib/format";
 import { phenomenonColor } from "@/lib/filters";
+import type { MapView } from "@/lib/map-layers";
 import { useApi } from "@/lib/use-api";
 import { cn } from "@/lib/utils";
 
@@ -42,48 +43,92 @@ const OTHERS = "#6b6b6b";
 export function TimelineStrip({
   phenomenon,
   entity,
+  view,
+  filter,
   open,
   onToggle,
 }: {
   readonly phenomenon: number | null;
   readonly entity?: string;
+  /** La serie sigue a la vista del mapa: con alertas arriba, abajo van alertas y no documentos. */
+  readonly view: MapView;
+  readonly filter: string | null;
   readonly open: boolean;
   readonly onToggle: () => void;
 }) {
-  const { data, error, loading } = useApi<TimelineData>("/timeline", {
+  // Con el mapa en alertas, la franja mide alertas emitidas: una serie de documentos bajo un mapa
+  // de alertas son dos cosas distintas presentadas como si fueran la misma.
+  const showAlerts = view === "alertas";
+  const alerts = useApi<Alerts>(showAlerts ? "/alerts" : null, { kind: filter ?? undefined });
+
+  const { data, error, loading } = useApi<TimelineData>(showAlerts ? null : "/timeline", {
     phenomenon: phenomenon ?? undefined,
   });
-  const { data: focused } = useApi<TimelineData>(entity ? "/timeline" : null, {
+  const { data: focused } = useApi<TimelineData>(entity && !showAlerts ? "/timeline" : null, {
     phenomenon: phenomenon ?? undefined,
     entity,
   });
   const color = phenomenonColor(phenomenon);
-  const empty = data !== null && data.points.length === 0;
 
-  const series = data?.series ?? [];
-  const shadeOf = (source: string, index: number) =>
-    source === "Otros" ? { fill: OTHERS, opacity: 1 } : { fill: color, opacity: SHADES[index] ?? 0.2 };
+  // Las dos series comparten forma: un año, un total y una columna por categoría. Así la franja no
+  // tiene dos versiones de sí misma, solo dos fuentes.
+  const alertSeries = filter ? [filter] : ["Inminencia", "Estructural"];
+  const alertRows = (alerts.data?.years ?? []).map((year) => ({
+    year: year.year,
+    entity: 0,
+    Inminencia: year.imminent,
+    Estructural: year.structural,
+  }));
+
+  const empty = showAlerts
+    ? alerts.data !== null && alertRows.length === 0
+    : data !== null && data.points.length === 0;
+
+  const series = showAlerts ? alertSeries : (data?.series ?? []);
+  const shadeOf = (source: string, index: number) => {
+    if (source === "Inminencia") return { fill: "#f87171", opacity: 1 };
+    if (source === "Otros") return { fill: OTHERS, opacity: 1 };
+    return { fill: color, opacity: SHADES[index] ?? 0.2 };
+  };
+
+  const label = (source: string) =>
+    source === "Inminencia"
+      ? "riesgo inminente"
+      : source === "Estructural"
+        ? "riesgo estructural"
+        : source.replaceAll("_", " ");
 
   // Una fila por año con una columna por fuente, más la serie de la entidad si la hay.
   const byYear = new Map((focused?.points ?? []).map((point) => [point.year, point.total]));
-  const rows = (data?.points ?? []).map((point) => ({
-    year: point.year,
-    entity: byYear.get(point.year) ?? 0,
-    ...point.sources,
-  }));
+  const rows = showAlerts
+    ? alertRows
+    : (data?.points ?? []).map((point) => ({
+        year: point.year,
+        entity: byYear.get(point.year) ?? 0,
+        ...point.sources,
+      }));
   const appearances = (focused?.points ?? []).filter((point) => point.total > 0).length;
 
   return (
     <section className={cn(GLASS, "border-border/60 border-t")}>
       <header className="flex items-center gap-2 px-3 py-1.5">
-        <h2 className="shrink-0 text-[12px] font-medium">Documentos publicados por año</h2>
+        <h2 className="shrink-0 text-[12px] font-medium">
+          {showAlerts ? "Alertas emitidas por año" : "Documentos publicados por año"}
+        </h2>
         {entity && focused ? (
           <span className="text-primary shrink-0 text-[11px]">
             · {entity.replaceAll("-", " ")} reaparece en {appearances}{" "}
             {appearances === 1 ? "año" : "años"}
           </span>
         ) : null}
-        {data ? (
+        {showAlerts ? (
+          alerts.data ? (
+            <span className="text-muted-foreground min-w-0 truncate text-[11px]">
+              · {formatNumber(alerts.data.alerts)} alertas de la Defensoría del Pueblo entre{" "}
+              {alerts.data.since} y {alerts.data.until} · apilado por clase de riesgo
+            </span>
+          ) : null
+        ) : data ? (
           <span className="text-muted-foreground min-w-0 truncate text-[11px]">
             {empty
               ? `· ninguno de los ${formatNumber(data.total_documents)} documentos de este filtro trae fecha en la metadata de su fuente, así que no hay serie que mostrar`
@@ -105,9 +150,13 @@ export function TimelineStrip({
 
       {open && !empty ? (
         <div className="flex h-32 gap-3 px-2 pb-2">
-          {!data ? (
+          {!(showAlerts ? alerts.data : data) ? (
             <p className="text-muted-foreground grid h-full w-full place-items-center px-6 text-center text-[11px]">
-              {loading ? "Cargando…" : error ? `No se pudo cargar: ${error}` : "Sin datos"}
+              {(showAlerts ? alerts.loading : loading)
+                ? "Cargando…"
+                : (showAlerts ? alerts.error : error)
+                  ? `No se pudo cargar: ${showAlerts ? alerts.error : error}`
+                  : "Sin datos"}
             </p>
           ) : (
             <>
@@ -161,8 +210,8 @@ export function TimelineStrip({
                         opacity: shadeOf(source, index).opacity,
                       }}
                     />
-                    <span className="truncate" title={source.replaceAll("_", " ")}>
-                      {source.replaceAll("_", " ")}
+                    <span className="truncate" title={label(source)}>
+                      {label(source)}
                     </span>
                   </li>
                 ))}

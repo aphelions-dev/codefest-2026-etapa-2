@@ -12,7 +12,14 @@ import {
   PHENOMENON_STYLE,
   phenomenonRamp,
 } from "@/lib/filters";
-import type { MapDatum } from "@/lib/map-layers";
+import { TerritoryDetail } from "@/components/map/territory-detail";
+import {
+  type MapDatum,
+  type MapView,
+  VIEW_LABEL,
+  VIEW_PHENOMENON,
+  VIEW_PLACES,
+} from "@/lib/map-layers";
 import { cn } from "@/lib/utils";
 
 /** Ancho de la barra abierta y de su riel cuando se pliega. */
@@ -33,9 +40,16 @@ export function Sidebar({
   onToggleAnalysis,
   components,
   level,
+  view,
+  onView,
+  onLevel,
+  onFilter,
+  options,
   places,
   coverage,
   onSelectPlace,
+  detail,
+  filter,
 }: {
   readonly open: boolean;
   readonly onToggle: () => void;
@@ -46,11 +60,21 @@ export function Sidebar({
   /** Cuántos componentes activó el agente: el conmutador dice qué se recupera al abrirlo. */
   readonly components: number;
   readonly level: MapLevel;
+  readonly view: MapView;
+  readonly onView: (view: MapView) => void;
+  readonly onLevel: (level: MapLevel) => void;
+  readonly onFilter: (value: string | null) => void;
+  /** Los valores del filtro propio de la vista, con cuántos registra cada uno. */
+  readonly options: readonly { readonly value: string; readonly label: string; readonly count: number }[];
   /** Los territorios de la vista activa del mapa, ya ordenados por su cifra. */
   readonly places: readonly MapDatum[];
   /** Lo que la vista declara sobre su propia cobertura, al pie del ranking. */
   readonly coverage: string;
-  readonly onSelectPlace: (place: MapDatum) => void;
+  readonly onSelectPlace: (place: MapDatum | null) => void;
+  /** El territorio abierto: su detalle reemplaza la lista, que es el maestro-detalle del anexo. */
+  readonly detail: string | null;
+  /** El filtro propio de la vista, para que el detalle enseñe lo mismo que el mapa. */
+  readonly filter: string | null;
 }) {
   return (
     <aside
@@ -109,15 +133,100 @@ export function Sidebar({
 
       {open ? (
         <>
+          {/* Qué mide el mapa, y con qué recorte. Va aquí y no flotando sobre el mapa porque es
+              navegación —de qué va el tablero ahora mismo—, no una anotación del territorio, y
+              porque es lo que manda sobre el ranking que viene justo debajo. */}
+          <div className="border-border/60 space-y-2 border-b p-2">
+            <div aria-label="Vista del mapa" className="bg-muted/40 flex gap-0.5 rounded-lg p-0.5" role="group">
+              {(Object.keys(VIEW_LABEL) as MapView[]).map((option) => (
+                <button
+                  aria-pressed={view === option}
+                  className={cn(
+                    "flex-1 rounded-md px-2 py-1 text-[11px] transition-colors",
+                    view === option
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  key={option}
+                  onClick={() => onView(option)}
+                  title={
+                    VIEW_PHENOMENON[option]
+                      ? `${VIEW_LABEL[option]} · solo hay datos del fenómeno ${VIEW_PHENOMENON[option]}, así que se filtra a él`
+                      : VIEW_LABEL[option]
+                  }
+                  type="button"
+                >
+                  {VIEW_LABEL[option]}
+                </button>
+              ))}
+            </div>
+
+            {/* El nivel solo aplica a los documentos: las otras dos vistas miden en su propio nivel. */}
+            {view === "documentos" ? (
+              <div aria-label="Nivel territorial" className="flex gap-1" role="group">
+                {(["country", "department"] as const).map((option) => (
+                  <button
+                    aria-pressed={level === option}
+                    className="border-border/60 aria-pressed:border-primary aria-pressed:text-primary text-muted-foreground rounded-md border px-2 py-0.5 text-[10px]"
+                    key={option}
+                    onClick={() => onLevel(option)}
+                    type="button"
+                  >
+                    {option === "country" ? "Países" : "Departamentos"}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {options.length > 0 ? (
+              <div aria-label="Filtrar la capa" className="flex flex-wrap gap-1" role="group">
+                <button
+                  aria-pressed={filter === null}
+                  className="border-border/60 aria-pressed:border-primary aria-pressed:text-primary text-muted-foreground rounded-md border px-1.5 py-0.5 text-[10px]"
+                  onClick={() => onFilter(null)}
+                  type="button"
+                >
+                  Todos
+                </button>
+                {options.map((option) => (
+                  <button
+                    aria-pressed={filter === option.value}
+                    className="border-border/60 aria-pressed:border-primary aria-pressed:text-primary text-muted-foreground rounded-md border px-1.5 py-0.5 text-[10px]"
+                    key={option.value}
+                    onClick={() => onFilter(filter === option.value ? null : option.value)}
+                    type="button"
+                  >
+                    {option.label}
+                    <span className="opacity-60"> {option.count}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3" data-ranking-scroll>
-            {/* El ranking va suelto en la barra, sin tarjeta: ya está dentro de un panel con su
-                borde, y una caja dentro de otra solo añade ruido. */}
-            {places.length > 0 ? (
+            {/* Maestro-detalle: con un territorio abierto, su evidencia ocupa el lugar de la lista
+                en vez de abrirse en otro sitio y partir la atención en dos. El ranking va suelto,
+                sin tarjeta: ya está dentro de un panel con su borde.
+
+                En la vista de grupos no hay detalle: ahí cada elemento ya es un municipio, y su
+                evidencia es el fragmento al que enlaza la ficha del mapa. */}
+            {detail ? (
+              <TerritoryDetail
+                group={null}
+                kind={view === "alertas" ? filter : null}
+                onBack={() => onSelectPlace(null)}
+                phenomenon={phenomenon}
+                placeId={detail}
+              />
+            ) : places.length > 0 ? (
               <div className="space-y-2">
                 <SectionHeader
                   aside={`${places.length}`}
-                  info="Los territorios de la vista activa del mapa, del que más registra al que menos. Tocar uno lo fija en el mapa y abre su ficha con la evidencia."
-                  title={level === "department" ? "Departamentos" : "Territorios"}
+                  info="Lo que la vista activa del mapa está midiendo, del que más registra al que menos. Tocar uno lo fija en el mapa y abre su evidencia aquí."
+                  title={
+                    view === "documentos" && level === "country" ? "Países" : VIEW_PLACES[view]
+                  }
                 />
                 <Ranking<MapDatum>
                   color={phenomenonRamp(phenomenon)[2]}

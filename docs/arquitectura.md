@@ -187,11 +187,28 @@ análisis depende de poder verificar la afirmación en el texto original.
 El mapa no superpone capas: cada vista es **una pregunta distinta sobre un territorio distinto**, y
 mezclarlas produciría un color que no significa nada.
 
-| Vista | Qué cuenta | Fuente | Qué no dice |
-|---|---|---|---|
-| Documentos | Documentos del corpus que nombran el territorio | Corpus de la Etapa 1 | Nombrar no es actuar |
-| Alertas | Alertas de la Defensoría que nombran el departamento | 363 alertas, 2017–2026 | Una alerta nacional cuenta en cada departamento que nombra |
-| Grupos armados | Municipios con presencia declarada de al menos un grupo | Amazon Underworld, 1.407 municipios | Es presencia declarada, no intensidad ni riesgo |
+| Vista | Qué cuenta | Nivel que pinta | Fuente | Qué no dice |
+|---|---|---|---|---|
+| Documentos | Documentos del corpus que nombran el territorio | País o departamento | Corpus de la Etapa 1 | Nombrar no es actuar |
+| Alertas | Alertas de la Defensoría que nombran el departamento | Departamento | 363 alertas, 2017–2026 | Una alerta nacional cuenta en cada departamento que nombra |
+| Grupos armados | Grupos presentes en cada municipio | **Municipio** | Amazon Underworld, 1.407 municipios de seis países | Es presencia declarada, no intensidad ni riesgo |
+
+La presencia armada se pinta **municipio a municipio** y no agregada al departamento, porque es el
+nivel en el que la fuente mide: dentro de un mismo departamento hay municipios con cuatro grupos y
+municipios sin ninguno, y agregarlos borraría justo eso. La geometría municipal no sobrevivió a la
+indexación de la Etapa 1, así que se toma de geoBoundaries (CC BY 4.0) y se cruza por nombre;
+cuando un nombre se repite en el país, desempata el polígono que contiene el centro del municipio.
+1.385 de los 1.407 municipios (98 %) encuentran su forma.
+
+**Coherencia entre filtros.** Las alertas y la presencia armada son, las dos, documentos del
+fenómeno 3 y de ningún otro. Verlas con el filtro global puesto en F1 mostraría cifras de F3 bajo
+una etiqueta que dice F1, así que la vista fija su fenómeno al activarse y el filtro global la
+devuelve a *Documentos* si se cambia. Por la misma razón la franja temporal sigue a la vista: con
+el mapa en alertas, abajo van alertas emitidas por año, no documentos publicados.
+
+El filtro por entidad sí recorta las alertas —una alerta es un documento del corpus— pero no la
+presencia armada, que viene de otra fuente. El distintivo del filtro lo declara en vez de ignorarlo
+en silencio.
 
 Las tres se reconstruyeron **desde el propio índice**, sin volver al corpus crudo: los documentos de
 Amazon Underworld y de Alertas Tempranas guardan sus campos estructurados dentro del texto indexado

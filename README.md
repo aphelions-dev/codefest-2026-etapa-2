@@ -36,9 +36,14 @@ El mapa es el lienzo y todo lo demás se apoya en sus bordes.
   filtro activo aparece arriba y se quita con un clic o con `Esc`.
 - **Verificar cualquier dato**: un clic en una celda, una arista o un territorio abre el documento
   original en el fragmento exacto que lo sustenta. En el cuadrante, doble clic.
-- **Cambiar lo que mide el mapa**: *Documentos*, *Alertas* o *Grupos armados*, arriba a la
-  izquierda. Cada vista tiene su filtro propio —clase de riesgo, grupo armado— y su propia ficha
-  con la fuente y sus límites. En *Documentos*, además, se alterna entre países y departamentos.
+- **Cambiar lo que mide el mapa**: *Documentos*, *Alertas* o *Grupos armados*, en la barra
+  izquierda bajo el filtro de fenómeno. Cada vista tiene su filtro propio —clase de riesgo, grupo
+  armado— y su ficha con la fuente y sus límites. En *Documentos*, además, se alterna entre países
+  y departamentos.
+
+  Las alertas y la presencia armada solo existen en el fenómeno 3, así que elegirlas fija ese
+  filtro, y cambiar a otro fenómeno devuelve el mapa a *Documentos*: el tablero nunca enseña cifras
+  de un fenómeno bajo la etiqueta de otro.
 
 ### El chat de pruebas (`frontagent.`)
 
@@ -100,6 +105,11 @@ uv run --env-file ../.env python -m precompute.places           # países y depa
 uv run --env-file ../.env python -m precompute.document_dates   # fechas desde la metadata de la fuente
 uv run --env-file ../.env python -m precompute.armed_presence   # presencia armada por municipio
 uv run --env-file ../.env python -m precompute.early_warnings   # alertas de la Defensoría
+uv run --env-file ../.env python -m precompute.amazon_regions   # geometría de nivel 1 de la cuenca
+
+# Municipios: necesita los ADM2 de geoBoundaries (gbOpen) de los seis países amazónicos,
+# descargados como adm2_<ISO3>.json en una carpeta cualquiera.
+uv run --env-file ../.env python -m precompute.municipalities --data <carpeta>
 ```
 
 Cada uno es idempotente y dice por consola qué produjo. `document_dates` informa además de cuántos

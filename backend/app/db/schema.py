@@ -67,9 +67,13 @@ create table if not exists armed_presence (
     area_km2    double precision,
     groups      text[] not null default '{}',
     no_info     boolean not null default false,
+    -- Poligono del municipio, de geoBoundaries: la fuente mide aqui, no en el departamento.
+    geometry    jsonb,
     doc_id      text not null,
     chunk_id    text not null
 );
+
+alter table armed_presence add column if not exists geometry jsonb;
 
 create index if not exists armed_presence_admin1 on armed_presence(admin1_code);
 create index if not exists armed_presence_country on armed_presence(country);

@@ -6,7 +6,7 @@ permiten volver al fragmento de origen.
 
 import json
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Path, Query
 
 from app.db import alerts as alerts_db
 from app.db import breakdown as breakdown_db
@@ -14,6 +14,7 @@ from app.db import entities as entities_db
 from app.db import places as places_db
 from app.db import presence as presence_db
 from app.db import quadrant as quadrant_db
+from app.db import territory as territory_db
 from app.db import timeline as timeline_db
 from app.db import documents as documents_db
 from app.db.pool import Pool
@@ -45,12 +46,16 @@ from app.responses import (
     PlaceProperties,
     ArmedGroup,
     Municipality,
+    MunicipalityFeature,
     Places,
     Presence,
     PresenceFeature,
     PresenceProperties,
+    PlaceFragment,
     Quadrant,
     QuadrantPoint,
+    Territory,
+    TerritoryAlert,
     Timeline,
     TimelinePoint,
     Trace,
@@ -326,13 +331,17 @@ async def presence(
 ) -> Presence:
     """Que grupos armados registra cada territorio, y en que municipios.
 
-    El dato viene por municipio, pero la geometria municipal no esta en el indice: el mapa agrega
-    al departamento y la lista conserva el municipio, que es donde la fuente mide. Es un conteo de
-    presencia declarada por la fuente, no una medida de intensidad ni un nivel de riesgo.
+    El dato viene por municipio, pero la geometria municipal no esta en el indice: el mapa agrega al
+    territorio de nivel 1 —departamento, estado o provincia, segun el pais— y la lista conserva el
+    municipio, que es donde la fuente mide. Cubre los seis paises de la cuenca amazonica.
+
+    Es un conteo de presencia declarada por la fuente, no una medida de intensidad ni de riesgo.
     """
     counts = await presence_db.coverage(pool, group)
-    territories = await presence_db.by_territory(pool, group)
+    territories = await presence_db.by_territory(pool, group, country)
     places = await presence_db.municipalities(pool, group, country, limit)
+    # El mapa pide todos los que puede dibujar; la lista, solo los `limit` primeros.
+    drawn = await presence_db.municipalities(pool, group, country, 2000, mapped=True)
 
     return Presence(
         group=group,
@@ -346,6 +355,14 @@ async def presence(
             for row in await presence_db.catalogue(pool)
         ],
         features=[
+            MunicipalityFeature(
+                id=row["pcode"],
+                geometry=json.loads(row["geometry"]),
+                properties=_municipality(row),
+            )
+            for row in drawn
+        ],
+        regions=[
             PresenceFeature(
                 id=row["place_id"],
                 geometry=json.loads(row["geometry"]),
@@ -362,19 +379,21 @@ async def presence(
             )
             for row in territories
         ],
-        places=[
-            Municipality(
-                pcode=row["pcode"],
-                country=row["country"],
-                admin1=row["admin1"],
-                admin2=row["admin2"],
-                population=row["population"],
-                groups=list(row["groups"]),
-                no_info=row["no_info"],
-                trace=Trace(doc_id=row["doc_id"], chunk_id=row["chunk_id"]),
-            )
-            for row in places
-        ],
+        places=[_municipality(row) for row in places],
+    )
+
+
+def _municipality(row) -> Municipality:
+    """Una fila de `armed_presence` como municipio, con su traza."""
+    return Municipality(
+        pcode=row["pcode"],
+        country=row["country"],
+        admin1=row["admin1"],
+        admin2=row["admin2"],
+        population=row["population"],
+        groups=list(row["groups"]),
+        no_info=row["no_info"],
+        trace=Trace(doc_id=row["doc_id"], chunk_id=row["chunk_id"]),
     )
 
 
@@ -382,17 +401,21 @@ async def presence(
 async def alerts(
     pool: Pool,
     kind: str | None = Query(default=None, description="Inminencia o Estructural"),
+    entity: str | None = Query(default=None, description="Solo alertas que nombran la entidad"),
     limit: int = Query(default=20, ge=1, le=100, description="Cuantas alertas recientes listar"),
 ) -> Alerts:
     """Donde y cuando se emitieron alertas, separando el riesgo inminente del estructural.
 
     Una alerta de alcance nacional nombra varios departamentos y cuenta en cada uno: la cifra es
     "alertas que nombran el territorio", no "alertas sobre el territorio", y la vista lo declara.
+
+    Las alertas son documentos del corpus, asi que `entity` las recorta igual que al resto del
+    tablero: es el filtro global, no uno propio de esta vista.
     """
     if kind is not None and kind not in alerts_db.KINDS:
         raise HTTPException(422, f"kind tiene que ser uno de {', '.join(alerts_db.KINDS)}")
 
-    counts = await alerts_db.coverage(pool)
+    counts = await alerts_db.coverage(pool, entity)
     return Alerts(
         kind=kind,
         alerts=counts["alerts"],
@@ -415,7 +438,7 @@ async def alerts(
                     trace=Trace(doc_id=row["sample_doc"], chunk_id=row["sample_chunk"]),
                 ),
             )
-            for row in await alerts_db.by_territory(pool, kind)
+            for row in await alerts_db.by_territory(pool, kind, entity)
         ],
         years=[
             AlertYear(
@@ -424,7 +447,7 @@ async def alerts(
                 imminent=row["imminent"],
                 structural=row["structural"],
             )
-            for row in await alerts_db.by_year(pool, kind)
+            for row in await alerts_db.by_year(pool, kind, entity)
         ],
         recent=[
             Alert(
@@ -434,6 +457,83 @@ async def alerts(
                 issued_on=row["issued_on"],
                 trace=Trace(doc_id=row["doc_id"], chunk_id=row["chunk_id"]),
             )
-            for row in await alerts_db.recent(pool, kind, limit)
+            for row in await alerts_db.recent(pool, kind, limit, entity)
+        ],
+    )
+
+
+@router.get("/territories/{place_id}", summary="Todo lo que el radar sabe de un territorio")
+async def territory(
+    pool: Pool,
+    place_id: str = Path(pattern=r"^[A-Z]{3}$|^CO-[A-Z]{2,3}$", description="Pais o departamento"),
+    phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+    group: str | None = Query(default=None, description="Limitar los municipios a un grupo"),
+    kind: str | None = Query(default=None, description="Limitar las alertas a una clase de riesgo"),
+    limit: int = Query(default=12, ge=1, le=60, description="Cuantos fragmentos devolver"),
+) -> Territory:
+    """La evidencia de un territorio, para el detalle de la barra lateral.
+
+    Las tres secciones vienen de fuentes distintas y pueden no coincidir: un municipio puede
+    registrar presencia armada sin que ningun documento del corpus lo nombre, y eso es informacion,
+    no un error. Cada seccion declara de donde sale.
+    """
+    place = await places_db.by_id(pool, place_id)
+    if place is None:
+        raise HTTPException(404, f"No hay ningun territorio con id {place_id}")
+
+    value = phenomenon.value if phenomenon else None
+    total, rows = await territory_db.fragments(pool, place_id, value, limit)
+    towns = (
+        await territory_db.municipalities(pool, place["name"], group)
+        if place["level"] == "department"
+        else []
+    )
+    warnings = (
+        await territory_db.alerts(pool, place_id, kind) if place["level"] == "department" else []
+    )
+
+    return Territory(
+        place_id=place["place_id"],
+        name=place["name"],
+        iso2=place["iso2"],
+        level=place["level"],
+        phenomenon=value,
+        total_fragments=total,
+        fragments=[
+            PlaceFragment(
+                doc_id=row["doc_id"],
+                chunk_id=row["chunk_id"],
+                phenomenon=row["phenomenon"],
+                observatory=row["observatory"],
+                language=row["language"],
+                mentions=row["mentions"],
+                excerpt=row["excerpt"],
+                truncated=row["truncated"],
+            )
+            for row in rows
+        ],
+        municipalities=[
+            Municipality(
+                pcode=row["pcode"],
+                country=row["country"],
+                admin1=row["admin1"],
+                admin2=row["admin2"],
+                population=row["population"],
+                groups=list(row["groups"]),
+                no_info=row["no_info"],
+                trace=Trace(doc_id=row["doc_id"], chunk_id=row["chunk_id"]),
+            )
+            for row in towns
+        ],
+        alerts=[
+            TerritoryAlert(
+                doc_id=row["doc_id"],
+                code=row["code"],
+                kind=row["kind"],
+                issued_on=row["issued_on"],
+                excerpt=row["excerpt"],
+                trace=Trace(doc_id=row["doc_id"], chunk_id=row["chunk_id"]),
+            )
+            for row in warnings
         ],
     )

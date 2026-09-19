@@ -191,6 +191,15 @@ class PresenceFeature(BaseModel):
     properties: PresenceProperties
 
 
+class MunicipalityFeature(BaseModel):
+    """Un municipio como Feature de GeoJSON: es donde la fuente mide, y donde el mapa lo pinta."""
+
+    type: str = "Feature"
+    id: str
+    geometry: dict
+    properties: "Municipality"
+
+
 class Municipality(BaseModel):
     """El nivel en el que la fuente da el dato, con su traza al fragmento que lo sustenta."""
 
@@ -224,7 +233,11 @@ class Presence(BaseModel):
     without_information: int
     matching: int
     groups: list[ArmedGroup]
-    features: list[PresenceFeature]
+    # El mapa pinta municipios: es el nivel en el que la fuente mide, y agregarlos al departamento
+    # perderia justo lo que aporta, que dentro de un departamento unos tienen cuatro grupos y otros
+    # ninguno. `regions` acompana con el agregado de nivel 1, para el ranking y la comparacion.
+    features: list[MunicipalityFeature]
+    regions: list[PresenceFeature]
     places: list[Municipality]
 
 
@@ -281,6 +294,49 @@ class Alerts(BaseModel):
     features: list[AlertFeature]
     years: list[AlertYear]
     recent: list[Alert]
+
+
+class PlaceFragment(BaseModel):
+    """Un fragmento que nombra el territorio, con lo justo para juzgarlo y abrirlo entero."""
+
+    doc_id: str
+    chunk_id: str
+    phenomenon: int
+    observatory: str | None = None
+    language: str | None = None
+    mentions: int
+    excerpt: str
+    truncated: bool
+
+
+class TerritoryAlert(BaseModel):
+    """Una alerta que nombra el territorio."""
+
+    doc_id: str
+    code: str
+    kind: str
+    issued_on: date | None = None
+    excerpt: str
+    trace: Trace
+
+
+class Territory(BaseModel):
+    """Todo lo que el radar sabe de un territorio: quien lo nombra, quien opera y que se alerto.
+
+    Es el nivel en el que el tablero deja de mostrar cifras y muestra evidencia: cada elemento lleva
+    su `doc_id` y su `chunk_id`, y desde ahi se abre el documento por el fragmento exacto.
+    """
+
+    place_id: str
+    name: str
+    iso2: str | None = None
+    level: str
+    phenomenon: int | None = None
+    # Cuantos fragmentos del corpus nombran el territorio, mas alla de los que se devuelven.
+    total_fragments: int
+    fragments: list[PlaceFragment]
+    municipalities: list[Municipality]
+    alerts: list[TerritoryAlert]
 
 
 class TimelinePoint(BaseModel):

@@ -10,12 +10,11 @@ import {
   SelectionOutline,
   type Shapes,
 } from "@/components/map/layers";
-import { GLASS, GradientLegend } from "@/components/map/panel";
+import { GradientLegend } from "@/components/map/panel";
 import { HoverCard, PlaceCard } from "@/components/map/place-card";
 import { Map, MapControls } from "@/components/ui/map";
 import { type MapLevel, phenomenonRamp } from "@/lib/filters";
-import { type MapDatum, type MapGuide, type MapView, VIEW_LABEL } from "@/lib/map-layers";
-import { cn } from "@/lib/utils";
+import type { MapDatum, MapGuide, MapView } from "@/lib/map-layers";
 
 // El corpus habla de todo el mundo en F1 y F2, y de Colombia en F3. El centro va desplazado al
 // oeste porque la barra lateral tapa el borde izquierdo: así el territorio cae en el hueco visible.
@@ -47,12 +46,7 @@ export function MapBackdrop({
   breaks,
   phenomenon,
   view,
-  onView,
   level,
-  onLevel,
-  filter,
-  onFilter,
-  options,
   selected,
   onSelect,
   rankOf,
@@ -66,13 +60,7 @@ export function MapBackdrop({
   /** El fenómeno filtrado decide la rampa: el mismo color aquí, en las barras y en la leyenda. */
   readonly phenomenon: number | null;
   readonly view: MapView;
-  readonly onView: (view: MapView) => void;
   readonly level: MapLevel;
-  readonly onLevel: (level: MapLevel) => void;
-  /** Filtro propio de la vista: la clase de alerta o el grupo armado. */
-  readonly filter: string | null;
-  readonly onFilter: (value: string | null) => void;
-  readonly options: readonly { readonly value: string; readonly label: string; readonly count: number }[];
   readonly selected: Selection | null;
   readonly onSelect: (selection: Selection | null) => void;
   readonly rankOf: (place: MapDatum | null) => number | null;
@@ -101,6 +89,9 @@ export function MapBackdrop({
   // Los países solo tienen sentido en la vista de documentos: las otras dos son de Colombia.
   const world = view === "documentos" && level === "country";
   const camera = world ? CAMERA.country : CAMERA.department;
+  // La presencia va de 1 a unos pocos grupos: los cortes son los propios valores, no cuantiles de
+  // una distribución larga como la de los documentos.
+  const steps = view === "grupos" ? [1, 2, 3, 4] : [...breaks];
   const zoom = world ? FIT_ZOOM.country : FIT_ZOOM.department;
 
   return (
@@ -114,11 +105,11 @@ export function MapBackdrop({
       >
         <MapResizer />
         <MapControls className="!right-(--map-right)" position="top-right" />
-        {shapes && breaks.length > 0 ? (
+        {shapes && steps.length > 0 ? (
           <ChoroplethLayer<MapDatum>
             data={shapes}
             fillHoverPaint={{ "fill-opacity": 0.95 }}
-            fillPaint={choroplethPaint("value", [...breaks], [...ramp])}
+            fillPaint={choroplethPaint("value", steps, [...ramp])}
             interactive
             linePaint={{ "line-color": "#0b0b0b", "line-width": 0.5, "line-opacity": 0.7 }}
             onClick={(event) => {
@@ -171,87 +162,11 @@ export function MapBackdrop({
         ) : null}
 
         <div className="absolute top-3 left-3 w-80 space-y-2">
-          {/* Qué mide el mapa. Cada vista consulta su propia fuente y mide otra cosa, así que es
-              una elección de pregunta y no una capa que se superpone a la anterior. */}
-          <div aria-label="Vista del mapa" className="flex flex-wrap gap-1" role="group">
-            {(Object.keys(VIEW_LABEL) as MapView[]).map((option) => (
-              <button
-                aria-pressed={view === option}
-                className={cn(
-                  GLASS,
-                  "border-border/60 aria-pressed:border-primary aria-pressed:text-primary rounded-md border px-2 py-1 text-[11px]",
-                )}
-                key={option}
-                onClick={() => {
-                  onView(option);
-                  onFilter(null);
-                  onSelect(null);
-                }}
-                type="button"
-              >
-                {VIEW_LABEL[option]}
-              </button>
-            ))}
-          </div>
-
-          {/* El nivel solo aplica a los documentos: alertas y grupos son de Colombia. */}
-          {view === "documentos" ? (
-            <div aria-label="Nivel territorial" className="flex gap-1" role="group">
-              {(["country", "department"] as const).map((option) => (
-                <button
-                  aria-pressed={level === option}
-                  className={cn(
-                    GLASS,
-                    "border-border/60 aria-pressed:border-primary aria-pressed:text-primary rounded-md border px-2 py-1 text-[11px]",
-                  )}
-                  key={option}
-                  onClick={() => onLevel(option)}
-                  type="button"
-                >
-                  {option === "country" ? "Países" : "Departamentos"}
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          {/* Filtro propio de la vista: clase de riesgo o grupo armado. */}
-          {options.length > 0 ? (
-            <div aria-label="Filtrar la capa" className="flex flex-wrap gap-1" role="group">
-              <button
-                aria-pressed={filter === null}
-                className={cn(
-                  GLASS,
-                  "border-border/60 aria-pressed:border-primary aria-pressed:text-primary rounded-md border px-2 py-0.5 text-[10px]",
-                )}
-                onClick={() => onFilter(null)}
-                type="button"
-              >
-                Todos
-              </button>
-              {options.slice(0, 6).map((option) => (
-                <button
-                  aria-pressed={filter === option.value}
-                  className={cn(
-                    GLASS,
-                    "border-border/60 aria-pressed:border-primary aria-pressed:text-primary rounded-md border px-2 py-0.5 text-[10px]",
-                  )}
-                  key={option.value}
-                  onClick={() => onFilter(filter === option.value ? null : option.value)}
-                  title={`${option.label}: ${option.count}`}
-                  type="button"
-                >
-                  {option.label}
-                  <span className="opacity-60"> {option.count}</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-
           <PlaceCard
             collapsed={collapsed}
             color={ramp[2]}
             guide={guide}
-            legend={breaks.length > 0 ? <GradientLegend breaks={[...breaks]} ramp={[...ramp]} /> : null}
+            legend={steps.length > 0 ? <GradientLegend breaks={steps} ramp={[...ramp]} /> : null}
             onClose={() => onSelect(null)}
             onToggle={() => setCollapsed((open) => !open)}
             place={selected?.place ?? null}

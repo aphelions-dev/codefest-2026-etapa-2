@@ -12,7 +12,14 @@ import { SIDEBAR_OPEN, SIDEBAR_RAIL, Sidebar } from "@/components/sidebar";
 import { TimelineStrip } from "@/components/timeline-strip";
 import { AgentUnavailable, ask } from "@/lib/agent";
 import { useEntity, useMapLevel, usePhenomenon } from "@/lib/filters";
-import { type MapDatum, useLayerFilter, useMapLayer, useMapView } from "@/lib/map-layers";
+import {
+  type MapDatum,
+  type MapView,
+  useLayerFilter,
+  useMapLayer,
+  useMapView,
+  VIEW_PHENOMENON,
+} from "@/lib/map-layers";
 
 // Ancho del analista: el mapa lo usa para no encuadrar ni poner sus controles debajo del panel.
 const CHAT_RAIL = 44;
@@ -88,6 +95,30 @@ export function Dashboard() {
   const timelineEntity = activations.find((activation) => activation.tool === "get_timeline")?.filters?.entity;
 
   // La API devuelve los lugares ordenados por documentos, así que el índice ya es el puesto.
+  /**
+   * Cambiar de vista cambia el fenómeno cuando la vista solo existe en uno: las alertas y la
+   * presencia armada son documentos del fenómeno 3, y verlas con el filtro en F1 mostraría cifras
+   * de F3 bajo una etiqueta que dice otra cosa.
+   */
+  const onView = (next: MapView) => {
+    setView(next);
+    setFilter(null);
+    setSelected(null);
+    const required = VIEW_PHENOMENON[next];
+    if (required && phenomenon !== required) setPhenomenon(required);
+  };
+
+  /** Y al revés: cambiar a un fenómeno que la vista no cubre la devuelve a los documentos. */
+  const onPhenomenon = (next: number | null) => {
+    setPhenomenon(next);
+    const required = VIEW_PHENOMENON[view];
+    if (required && next !== null && next !== required) {
+      setView(null);
+      setFilter(null);
+      setSelected(null);
+    }
+  };
+
   const rankOf = (place: MapDatum | null) => {
     if (!place) return null;
     const index = layer.data.findIndex((datum) => datum.id === place.id);
@@ -124,15 +155,10 @@ export function Dashboard() {
         bottomInset={timelineSpace}
         breaks={breaks}
         data={layer.data}
-        filter={filter}
         guide={layer.guide}
         leftInset={sidebarWidth}
         level={level}
-        onFilter={setFilter}
-        onLevel={setLevel}
         onSelect={setSelected}
-        onView={setView}
-        options={layer.options}
         phenomenon={phenomenon}
         rankOf={rankOf}
         rightInset={chatWidth}
@@ -144,6 +170,7 @@ export function Dashboard() {
         activations={analysisOpen ? columnPanels : []}
         bottomInset={timelineSpace}
         entity={entity}
+        entityNote={layer.entityApplies ? undefined : "no alcanza al mapa"}
         onEntity={setEntity}
         leftInset={sidebarWidth}
         onClose={() => setAnalysisOpen(false)}
@@ -155,11 +182,18 @@ export function Dashboard() {
         analysisOpen={analysisOpen}
         components={columnPanels.length}
         coverage={layer.coverage}
+        detail={view === "grupos" ? null : (selected?.place.id ?? null)}
+        filter={filter}
         level={level}
-        onPhenomenon={setPhenomenon}
+        onFilter={setFilter}
+        onLevel={setLevel}
+        onPhenomenon={onPhenomenon}
+        onView={onView}
+        options={layer.options}
         places={layer.data}
+        view={view}
         onSelectPlace={(datum) =>
-          setSelected({ place: datum, geometry: datum.geometry as GeoJSON.Geometry })
+          setSelected(datum ? { place: datum, geometry: datum.geometry as GeoJSON.Geometry } : null)
         }
         onToggle={() => setSidebarChoice(!sidebarOpen)}
         onToggleAnalysis={() => setAnalysisOpen((open) => !open)}
@@ -175,9 +209,11 @@ export function Dashboard() {
       >
         <TimelineStrip
           entity={entity ?? (timelineEntity as string | undefined)}
+          filter={filter}
           onToggle={() => setTimelineOpen((open) => !open)}
           open={timelineOpen}
           phenomenon={phenomenon}
+          view={view}
         />
       </div>
 

@@ -26,6 +26,7 @@ export function AnalysisPanel({
   phenomenon,
   entity,
   onEntity,
+  entityNote,
   leftInset,
   rightInset,
   bottomInset,
@@ -36,6 +37,8 @@ export function AnalysisPanel({
   /** Filtro global por entidad: una selección en cualquier vista lo cambia para todas. */
   readonly entity: string | null;
   readonly onEntity: (entityId: string | null) => void;
+  /** Qué no alcanza el filtro por entidad, cuando la vista del mapa no sale del corpus. */
+  readonly entityNote?: string;
   readonly leftInset: number;
   readonly rightInset: number;
   readonly bottomInset: number;
@@ -101,10 +104,15 @@ export function AnalysisPanel({
             <button
               className="border-primary/50 text-primary hover:bg-primary/10 flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]"
               onClick={() => onEntity(null)}
-              title="Quitar el filtro por entidad"
+              title={
+                entityNote
+                  ? `Quitar el filtro por entidad. ${entityNote}`
+                  : "Quitar el filtro por entidad"
+              }
               type="button"
             >
               Filtrado por {entity.replaceAll("-", " ")}
+              {entityNote ? <span className="opacity-70">· {entityNote}</span> : null}
               <XIcon className="size-3" />
             </button>
           ) : null}

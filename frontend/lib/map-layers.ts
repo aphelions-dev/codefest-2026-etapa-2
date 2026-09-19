@@ -44,6 +44,25 @@ export type MapGuide = {
   readonly limits: string;
 };
 
+/**
+ * A qué fenómeno pertenece cada vista. Las alertas de la Defensoría y la presencia armada son
+ * documentos del fenómeno 3 y de ningún otro, así que verlas con el filtro puesto en F1 mostraría
+ * cifras de F3 bajo una etiqueta que dice F1. En vez de dejar ese estado y explicarlo después, la
+ * vista fija su fenómeno al activarse y el filtro global la devuelve a documentos si cambia.
+ */
+export const VIEW_PHENOMENON: Record<MapView, number | null> = {
+  documentos: null,
+  alertas: 3,
+  grupos: 3,
+};
+
+/** Cómo se llama lo que cada vista lista: no son departamentos en todas. */
+export const VIEW_PLACES: Record<MapView, string> = {
+  documentos: "Territorios",
+  alertas: "Departamentos",
+  grupos: "Municipios",
+};
+
 export const VIEW_LABEL: Record<MapView, string> = {
   documentos: "Documentos",
   alertas: "Alertas",
@@ -68,6 +87,8 @@ type Layer = {
   readonly options: readonly { readonly value: string; readonly label: string; readonly count: number }[];
   /** Lo que la vista declara sobre su propia cobertura, bajo el gráfico. */
   readonly coverage: string;
+  /** Si el filtro global por entidad recorta esta vista: no todas salen del corpus. */
+  readonly entityApplies: boolean;
   readonly loading: boolean;
   readonly error: string | null;
 };
@@ -107,6 +128,7 @@ export function useMapLayer(
   });
   const alerts = useApi<Alerts>(view === "alertas" ? "/alerts" : null, {
     kind: filter ?? undefined,
+    entity: entity ?? undefined,
   });
   const presence = useApi<Presence>(view === "grupos" ? "/presence" : null, {
     group: filter ?? undefined,
@@ -151,39 +173,48 @@ export function useMapLayer(
       coverage: alerts.data
         ? `${formatNumber(alerts.data.imminent)} de riesgo inminente y ${formatNumber(alerts.data.structural)} estructural`
         : "",
+      // El filtro por entidad recorta las alertas, porque una alerta es un documento del corpus.
+      entityApplies: true,
       loading: alerts.loading,
       error: alerts.error,
     };
   }
 
   if (view === "grupos") {
-    const data = (presence.data?.features ?? []).map(
-      (feature): MapDatum => ({
-        id: feature.properties.place_id,
-        name: feature.properties.name,
-        iso2: feature.properties.iso2 ?? null,
-        value: feature.properties.with_presence,
-        headline: `${feature.properties.with_presence} municipios con presencia`,
-        detail:
-          `de ${feature.properties.municipalities} en el departamento · ` +
-          `${feature.properties.groups} grupos distintos` +
-          (feature.properties.without_information > 0
-            ? ` · ${feature.properties.without_information} sin información`
-            : ""),
-        trace: feature.properties.trace,
-        geometry: feature.geometry,
-      }),
-    );
+    // El mapa pinta **municipios**: es donde Amazon Underworld mide, y agregarlos al departamento
+    // perdería justo lo que la fuente aporta, que dentro de un departamento unos registran cuatro
+    // grupos y otros ninguno.
+    const data = [...(presence.data?.features ?? [])]
+      .sort((a, b) => b.properties.groups.length - a.properties.groups.length)
+      .map(
+        (feature): MapDatum => ({
+          id: feature.properties.pcode,
+          name: feature.properties.admin2,
+          iso2: null,
+          value: feature.properties.groups.length,
+          headline: `${feature.properties.groups.length} grupos`,
+          detail:
+            `${feature.properties.admin1}, ${feature.properties.country}` +
+            (feature.properties.population
+              ? ` · ${formatNumber(feature.properties.population)} habitantes`
+              : "") +
+            ` · ${feature.properties.groups.join(", ")}`,
+          trace: feature.properties.trace,
+          geometry: feature.geometry,
+        }),
+      );
     return {
       data,
       guide: {
         title: "Grupos armados · cuenca amazónica",
-        unit: "Municipios del departamento con presencia declarada",
-        measures: "Municipios donde la fuente registra la presencia de al menos un grupo armado.",
-        read: "Más intenso, más municipios con presencia. Es presencia declarada, no intensidad ni nivel de riesgo.",
-        source: `Amazon Underworld (CC BY 4.0) · ${presence.data?.municipalities ?? 0} municipios de seis países`,
+        unit: "Grupos armados presentes en el municipio",
+        measures: "Grupos que la fuente registra en cada municipio de la cuenca amazónica.",
+        read: "Más intenso, más grupos distintos. Es presencia declarada, no intensidad ni nivel de riesgo.",
+        source: `Amazon Underworld (CC BY 4.0) · geometría de geoBoundaries (CC BY 4.0) · ${formatNumber(
+          presence.data?.municipalities ?? 0,
+        )} municipios de Bolivia, Brasil, Colombia, Ecuador, Perú y Venezuela`,
         limits:
-          "Solo la cuenca amazónica, y solo Colombia tiene geometría departamental cargada. Un municipio sin información no se investigó, que no es lo mismo que sin presencia.",
+          "Solo la cuenca amazónica. Un municipio sin información no se investigó, que no es lo mismo que sin presencia, y por eso no aparece en el mapa.",
       },
       options: (presence.data?.groups ?? []).map((group) => ({
         value: group.name,
@@ -193,6 +224,9 @@ export function useMapLayer(
       coverage: presence.data
         ? `${formatNumber(presence.data.with_presence)} municipios con presencia y ${formatNumber(presence.data.without_information)} sin investigar, de ${formatNumber(presence.data.municipalities)}`
         : "",
+      // La presencia no sale del corpus sino de Amazon Underworld, así que filtrar por una entidad
+      // del corpus no la recorta. Se declara en vez de ignorarlo en silencio.
+      entityApplies: false,
       loading: presence.loading,
       error: presence.error,
     };
@@ -225,6 +259,7 @@ export function useMapLayer(
     },
     options: [],
     coverage: "",
+    entityApplies: true,
     loading: places.loading,
     error: places.error,
   };

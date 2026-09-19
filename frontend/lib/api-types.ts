@@ -164,9 +164,11 @@ export interface paths {
          * Presencia de grupos armados en la cuenca amazonica
          * @description Que grupos armados registra cada territorio, y en que municipios.
          *
-         *     El dato viene por municipio, pero la geometria municipal no esta en el indice: el mapa agrega
-         *     al departamento y la lista conserva el municipio, que es donde la fuente mide. Es un conteo de
-         *     presencia declarada por la fuente, no una medida de intensidad ni un nivel de riesgo.
+         *     El dato viene por municipio, pero la geometria municipal no esta en el indice: el mapa agrega al
+         *     territorio de nivel 1 —departamento, estado o provincia, segun el pais— y la lista conserva el
+         *     municipio, que es donde la fuente mide. Cubre los seis paises de la cuenca amazonica.
+         *
+         *     Es un conteo de presencia declarada por la fuente, no una medida de intensidad ni de riesgo.
          */
         get: operations["presence_presence_get"];
         put?: never;
@@ -190,8 +192,35 @@ export interface paths {
          *
          *     Una alerta de alcance nacional nombra varios departamentos y cuenta en cada uno: la cifra es
          *     "alertas que nombran el territorio", no "alertas sobre el territorio", y la vista lo declara.
+         *
+         *     Las alertas son documentos del corpus, asi que `entity` las recorta igual que al resto del
+         *     tablero: es el filtro global, no uno propio de esta vista.
          */
         get: operations["alerts_alerts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/territories/{place_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Todo lo que el radar sabe de un territorio
+         * @description La evidencia de un territorio, para el detalle de la barra lateral.
+         *
+         *     Las tres secciones vienen de fuentes distintas y pueden no coincidir: un municipio puede
+         *     registrar presencia armada sin que ningun documento del corpus lo nombre, y eso es informacion,
+         *     no un error. Cada seccion declara de donde sale.
+         */
+        get: operations["territory_territories__place_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -707,6 +736,24 @@ export interface components {
             trace: components["schemas"]["Trace"];
         };
         /**
+         * MunicipalityFeature
+         * @description Un municipio como Feature de GeoJSON: es donde la fuente mide, y donde el mapa lo pinta.
+         */
+        MunicipalityFeature: {
+            /**
+             * Type
+             * @default Feature
+             */
+            type: string;
+            /** Id */
+            id: string;
+            /** Geometry */
+            geometry: {
+                [key: string]: unknown;
+            };
+            properties: components["schemas"]["Municipality"];
+        };
+        /**
          * Phenomenon
          * @description Los tres fenomenos del reto.
          * @enum {integer}
@@ -729,6 +776,28 @@ export interface components {
                 [key: string]: unknown;
             };
             properties: components["schemas"]["PlaceProperties"];
+        };
+        /**
+         * PlaceFragment
+         * @description Un fragmento que nombra el territorio, con lo justo para juzgarlo y abrirlo entero.
+         */
+        PlaceFragment: {
+            /** Doc Id */
+            doc_id: string;
+            /** Chunk Id */
+            chunk_id: string;
+            /** Phenomenon */
+            phenomenon: number;
+            /** Observatory */
+            observatory?: string | null;
+            /** Language */
+            language?: string | null;
+            /** Mentions */
+            mentions: number;
+            /** Excerpt */
+            excerpt: string;
+            /** Truncated */
+            truncated: boolean;
         };
         /**
          * PlaceLevel
@@ -793,7 +862,9 @@ export interface components {
             /** Groups */
             groups: components["schemas"]["ArmedGroup"][];
             /** Features */
-            features: components["schemas"]["PresenceFeature"][];
+            features: components["schemas"]["MunicipalityFeature"][];
+            /** Regions */
+            regions: components["schemas"]["PresenceFeature"][];
             /** Places */
             places: components["schemas"]["Municipality"][];
         };
@@ -870,6 +941,50 @@ export interface components {
             recent: number;
             /** Earlier */
             earlier: number;
+            trace: components["schemas"]["Trace"];
+        };
+        /**
+         * Territory
+         * @description Todo lo que el radar sabe de un territorio: quien lo nombra, quien opera y que se alerto.
+         *
+         *     Es el nivel en el que el tablero deja de mostrar cifras y muestra evidencia: cada elemento lleva
+         *     su `doc_id` y su `chunk_id`, y desde ahi se abre el documento por el fragmento exacto.
+         */
+        Territory: {
+            /** Place Id */
+            place_id: string;
+            /** Name */
+            name: string;
+            /** Iso2 */
+            iso2?: string | null;
+            /** Level */
+            level: string;
+            /** Phenomenon */
+            phenomenon?: number | null;
+            /** Total Fragments */
+            total_fragments: number;
+            /** Fragments */
+            fragments: components["schemas"]["PlaceFragment"][];
+            /** Municipalities */
+            municipalities: components["schemas"]["Municipality"][];
+            /** Alerts */
+            alerts: components["schemas"]["TerritoryAlert"][];
+        };
+        /**
+         * TerritoryAlert
+         * @description Una alerta que nombra el territorio.
+         */
+        TerritoryAlert: {
+            /** Doc Id */
+            doc_id: string;
+            /** Code */
+            code: string;
+            /** Kind */
+            kind: string;
+            /** Issued On */
+            issued_on?: string | null;
+            /** Excerpt */
+            excerpt: string;
             trace: components["schemas"]["Trace"];
         };
         /**
@@ -1263,6 +1378,8 @@ export interface operations {
             query?: {
                 /** @description Inminencia o Estructural */
                 kind?: string | null;
+                /** @description Solo alertas que nombran la entidad */
+                entity?: string | null;
                 /** @description Cuantas alertas recientes listar */
                 limit?: number;
             };
@@ -1279,6 +1396,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    territory_territories__place_id__get: {
+        parameters: {
+            query?: {
+                /** @description Limitar a un fenomeno */
+                phenomenon?: components["schemas"]["Phenomenon"] | null;
+                /** @description Limitar los municipios a un grupo */
+                group?: string | null;
+                /** @description Limitar las alertas a una clase de riesgo */
+                kind?: string | null;
+                /** @description Cuantos fragmentos devolver */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Pais o departamento */
+                place_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Territory"];
                 };
             };
             /** @description Validation Error */

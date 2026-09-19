@@ -46,3 +46,11 @@ async def by_level(
             """,
             *args,
         )
+
+
+async def by_id(pool: asyncpg.Pool, place_id: str) -> asyncpg.Record | None:
+    """Un territorio por su identificador; `None` si no existe."""
+    async with pool.acquire() as connection:
+        return await connection.fetchrow(
+            "select place_id, name, level, iso2 from places where place_id = $1", place_id
+        )
