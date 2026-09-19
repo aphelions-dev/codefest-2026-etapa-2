@@ -152,8 +152,8 @@ curl -X POST http://127.0.0.1:8000/chat \
 Responde con el contrato de la especificación: `respuesta`, `evaluacion` (con `retrieval_context`
 y `tools_called`) y `metadata` (tokens por agente, número de interacciones, latencia y estado).
 
-El diseño del grafo, el reparto de modelos y las defensas frente a inyección están en
-[`ARQUITECTURA.md`](ARQUITECTURA.md).
+El diseño del grafo, el reparto de modelos y las defensas frente a inyección están en la
+sección 2 de [`docs/arquitectura.md`](docs/arquitectura.md).
 
 ### Los identificadores de modelo no se suponen
 
@@ -203,29 +203,12 @@ Pasos, iguales para los tres (Anexo A de la especificación):
 4. **Variables**: las de la tabla en *Environment Variables*.
 
 Las credenciales van en *Environment Variables* de cada recurso, **nunca** en el repositorio ni como
-build args: un build arg queda dentro de la imagen. El endpoint declarado en la ficha del agente
-(`AGENT_ENDPOINT`) tiene que coincidir con el subdominio `agent.` configurado.
+build args: un build arg queda dentro de la imagen. El endpoint que declara
+[`agent_card.json`](agent_card.json) tiene que coincidir con el subdominio `agent.` configurado.
 
 Ambos Dockerfiles construyen imágenes autosuficientes, corren sin root y traen `HEALTHCHECK`.
 
 ### Variables de entorno
-
-| Variable | Quién la usa | Para qué |
-|---|---|---|
-| `DATABASE_URL` | backend | Postgres con el índice y los precómputos |
-| `LITELLM_BASE_URL` | backend | Endpoint de modelos, compatible con OpenAI |
-| `LITELLM_API_KEY` | backend | Clave del endpoint de modelos |
-| `FAST_MODEL` / `DEEP_MODEL` | backend | Modelo del agente de visualizaciones y del de corpus |
-| `PROVIDER` | backend | Proveedor declarado en la ficha |
-| `AGENT_ENDPOINT` | backend | URL pública que declara la ficha |
-| `CORS_ORIGINS` | backend | Orígenes permitidos, separados por coma |
-| `LOAD_INDEX` | backend | `false` levanta el servicio sin cargar el encoder |
-| `NEXT_PUBLIC_API_URL` | frontend (build) | Dónde está la API |
-| `NEXT_PUBLIC_SURFACE` | frontend (build) | `dashboard` o `chat` |
-
----
-
-### Variables de entorno del recurso `agent.`
 
 | Variable | Obligatoria | Qué es |
 |---|---|---|
@@ -236,6 +219,8 @@ Ambos Dockerfiles construyen imágenes autosuficientes, corren sin root y traen 
 | `DEEP_MODEL` | sí | Identificador del modelo grande, de `GET /v1/models` |
 | `CORS_ORIGINS` | sí | Los dominios de `frontagent.` y `dashboard.`, separados por coma |
 | `HNSW_EF_SEARCH`, `EVIDENCE_THRESHOLD`, `TOP_K`, `MAX_FRAGMENTS_PER_DOC`, `MAX_RETRIES` | no | Valores medidos en la Etapa 1; solo se tocan con una medición delante |
+| `NEXT_PUBLIC_API_URL` | sí, en el build del frontend | Dónde está la API |
+| `NEXT_PUBLIC_SURFACE` | sí, en el build del frontend | `dashboard` o `chat` |
 
 La imagen del backend lleva dentro BGE-M3 (~2,2 GB), el encoder con el que se generó el índice.
 La primera construcción tarda; las siguientes reutilizan la capa. El contenedor no descarga pesos
