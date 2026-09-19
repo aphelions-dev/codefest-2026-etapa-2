@@ -80,7 +80,7 @@ async def test_la_evidencia_viaja_con_su_doc_id_y_su_chunk_id(settings):
 
     assert response.evaluacion.retrieval_context is not None
     assert "F2-CSIS-100" in response.evaluacion.retrieval_context[0]
-    assert "F2-CSIS-100#0" in response.evaluacion.retrieval_context[0]
+    assert "F2-CSIS-100-chunk-0000" in response.evaluacion.retrieval_context[0]
     assert "search_corpus" in {tool.name for tool in response.evaluacion.tools_called}
 
 

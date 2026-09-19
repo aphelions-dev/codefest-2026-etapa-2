@@ -43,7 +43,8 @@ class FakeRetriever:
 
 def fragment(doc_id: str, text: str, similarity: float = 0.8) -> Fragment:
     return Fragment(
-        chunk_id=f"{doc_id}#0",
+        # El formato real del corpus: el chunk_id es el doc_id mas su posicion.
+        chunk_id=f"{doc_id}-chunk-0000",
         doc_id=doc_id,
         source_file=f"{doc_id}.pdf",
         phenomenon=2,

@@ -16,8 +16,17 @@ from app.agent.state import ToolRecord, Usage
 
 log = logging.getLogger("agent.verifier")
 
-# Los identificadores del corpus tienen la forma F1-CSET-065.
-CITATION = re.compile(r"\[([A-Z0-9][A-Z0-9\-]{3,})\]")
+# Los identificadores del corpus tienen la forma F1-CSET-065, y el de un fragmento anade
+# -chunk-0126. Se admite espacio dentro de los corchetes: el modelo lo pone a menudo.
+CITATION = re.compile(r"\[\s*([A-Z0-9][A-Za-z0-9-]{3,})\s*\]")
+
+# El modelo no escribe el guion ASCII. Medido contra gpt-oss-120b: usa U+2011, el guion no
+# separable, y ahi el identificador deja de parecerse al del corpus. Sin normalizar esto, la
+# extraccion no encuentra ninguna cita y la comprobacion de trazabilidad pasa sin comprobar nada,
+# que es peor que no tenerla, porque parece que la tiene.
+DASHES = str.maketrans({dash: "-" for dash in "‐‑‒–—―−­"})
+# Espacios que el modelo mete dentro de la cita y que no son el espacio normal.
+SPACES = str.maketrans({space: " " for space in "     "})
 
 VERDICT_SCHEMA = {
     "type": "object",
@@ -28,13 +37,19 @@ VERDICT_SCHEMA = {
 
 
 def cited(answer: str) -> set[str]:
-    """Los identificadores que la respuesta cita entre corchetes."""
-    return set(CITATION.findall(answer))
+    """Los identificadores que la respuesta cita entre corchetes, ya normalizados."""
+    return set(CITATION.findall(answer.translate(DASHES).translate(SPACES)))
 
 
 def untraceable(answer: str, fragments: list[Fragment]) -> set[str]:
-    """Citas que no corresponden a ningun documento recuperado."""
+    """Citas que no corresponden a nada recuperado.
+
+    Vale tanto el identificador del documento como el de uno de sus fragmentos: el redactor cita
+    a veces el chunk, y sigue siendo una cita verificable porque ese chunk estaba en la evidencia.
+    Lo que no vale es un identificador que no se recupero, que es lo unico que hay que cazar.
+    """
     available = {fragment.doc_id for fragment in fragments}
+    available |= {fragment.chunk_id for fragment in fragments}
     return cited(answer) - available
 
 
