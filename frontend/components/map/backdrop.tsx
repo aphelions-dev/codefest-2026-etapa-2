@@ -1,5 +1,6 @@
 "use client";
 
+import type { Map as MapLibre } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -13,8 +14,9 @@ import {
 } from "@/components/map/layers";
 import { GradientLegend } from "@/components/map/panel";
 import { HoverCard, PlaceCard } from "@/components/map/place-card";
+import { ShareMenu } from "@/components/map/share-menu";
 import { Map, MapControls, type MapViewport } from "@/components/ui/map";
-import { type MapLevel, phenomenonRamp } from "@/lib/filters";
+import { type MapLevel, PHENOMENA, phenomenonRamp } from "@/lib/filters";
 import type { Rank } from "@/lib/format";
 import type { MapDatum, MapGuide, MapView } from "@/lib/map-layers";
 
@@ -95,6 +97,7 @@ export function MapBackdrop({
   // en vez de saltar al encuadre por defecto.
   const [carry, setCarry] = useState<{ readonly level: MapLevel; readonly camera: MapViewport } | null>(null);
   const switching = useRef(false);
+  const mapRef = useRef<MapLibre | null>(null);
   // El mapa del nuevo nivel ya está montado: se vuelve a escuchar el zoom.
   useEffect(() => {
     switching.current = false;
@@ -148,6 +151,7 @@ export function MapBackdrop({
         key={`${view}-${level}`}
         loading={loading && data.length === 0}
         onViewportChange={onViewport}
+        ref={mapRef}
         theme="dark"
         zoom={start?.zoom ?? camera.zoom}
       >
@@ -202,6 +206,32 @@ export function MapBackdrop({
         className="pointer-events-none absolute top-0 z-10 *:pointer-events-auto"
         style={{ left: leftInset, right: rightInset, bottom: bottomInset }}
       >
+        {/* Compartir la vista, bajo los controles de zoom: imagen con sus filtros o enlace. */}
+        <ShareMenu
+          className="absolute top-[88px] right-3"
+          map={mapRef}
+          snapshot={() => ({
+            title: guide.title,
+            filters: [
+              phenomenon ? `F${phenomenon} · ${PHENOMENA[phenomenon - 1].label}` : "Los tres fenómenos",
+              periodNote ? `Periodo: ${periodNote}` : "Todo el periodo del corpus",
+            ],
+            unit: guide.unit,
+            legend: { ramp, breaks: steps },
+            ranking: data.map((datum) => ({ name: datum.name, value: datum.value })),
+            selected: selected
+              ? {
+                  name: selected.place.region ? `${selected.place.name} · ${selected.place.region}` : selected.place.name,
+                  headline: selected.place.headline,
+                  detail: selected.place.facts.map((fact) => `${fact.label}: ${fact.value}`).join(" · ") || guide.sample,
+                }
+              : null,
+            source: guide.source,
+            url: window.location.href,
+            crop: { left: leftInset, right: rightInset, bottom: bottomInset },
+          })}
+        />
+
         {/* Recalculando con datos ya pintados: una barra que avisa sin tapar el mapa. */}
         {loading && data.length > 0 ? (
           <div className="bg-primary/15 absolute inset-x-0 top-0 h-0.5 overflow-hidden" role="status">
