@@ -289,12 +289,23 @@ class CorpusAgent:
         tool = self._toolbox.tools["search_corpus"]
         result = await tool.run(query=question)
         fragments = result.get("fragments", [])
+        # La salida va con los identificadores y la similitud de cada fragmento: es lo que la
+        # especificacion entiende por "la salida obtenida", y ademas deja que la interfaz enlace
+        # cada documento recuperado con su fragmento exacto.
         run.tools_called.append(
             {
                 "name": tool.name,
                 "input_parameters": {"query": question},
-                "output": f"{len(fragments)} fragmentos: "
-                + ", ".join(fragment["doc_id"] for fragment in fragments[:8]),
+                "output": json.dumps(
+                    [
+                        {
+                            key: fragment[key]
+                            for key in ("doc_id", "chunk_id", "observatory", "phenomenon", "similarity")
+                        }
+                        for fragment in fragments
+                    ],
+                    ensure_ascii=False,
+                ),
             }
         )
         run.retrieval_context = [fragment["text"] for fragment in fragments]
@@ -321,6 +332,8 @@ class CorpusAgent:
         )
         run.account(self.name, model, completion.get("usage"))
         answer = completion["choices"][0]["message"].get("content") or ""
+        # Las citas se comprueban contra la evidencia: el prompt no impide que el modelo invente
+        # una referencia plausible, la verificacion si.
         # Las citas se comprueban contra la evidencia: el prompt no impide que el modelo invente
         # una referencia plausible, la verificacion si.
         run.answer = citations.verify(answer, fragments)["answer"]

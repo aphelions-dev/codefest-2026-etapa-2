@@ -646,7 +646,10 @@ export interface components {
         };
         /**
          * Timeline
-         * @description Evolucion temporal. `dated` y `total` dicen sobre cuantos documentos se puede afirmar algo.
+         * @description Evolucion temporal por fuente.
+         *
+         *     `dated` y `total` dicen sobre cuantos documentos se puede afirmar algo; `series` son las fuentes
+         *     que tienen barra propia, en el orden en que se apilan.
          */
         Timeline: {
             /** Phenomenon */
@@ -657,15 +660,24 @@ export interface components {
             dated_documents: number;
             /** Total Documents */
             total_documents: number;
+            /** Series */
+            series: string[];
             /** Points */
             points: components["schemas"]["TimelinePoint"][];
         };
-        /** TimelinePoint */
+        /**
+         * TimelinePoint
+         * @description Un ano: el total y cuanto aporto cada fuente, para apilar la barra.
+         */
         TimelinePoint: {
             /** Year */
             year: number;
-            /** Documents */
-            documents: number;
+            /** Total */
+            total: number;
+            /** Sources */
+            sources: {
+                [key: string]: number;
+            };
         };
         /**
          * Tokens

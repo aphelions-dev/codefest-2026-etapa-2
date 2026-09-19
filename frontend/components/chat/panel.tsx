@@ -3,7 +3,7 @@
 import { MessageSquareIcon, PanelRightCloseIcon, PanelRightOpenIcon } from "lucide-react";
 
 import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ai-elements/conversation";
-import { Message, MessageContent } from "@/components/ai-elements/message";
+import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import {
   PromptInput,
   PromptInputBody,
@@ -11,13 +11,38 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { AgentStatus, AgentTrace, type Cost } from "@/components/agent-trace";
 import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
 import { type Activation, TOOLS } from "@/components/registry";
-import type { Step } from "@/lib/agent";
+import { DocumentLink } from "@/components/document-view";
+import { linkCitations, parseCitation, type Step } from "@/lib/agent";
 import { cn } from "@/lib/utils";
+import type { ComponentProps } from "react";
+
+/**
+ * Las citas del cuerpo de la respuesta se pintan como enlace al fragmento que las sostiene; el
+ * resto de enlaces, como enlaces normales.
+ */
+function CitationAnchor({ href, children, ...props }: ComponentProps<"a">) {
+  const citation = parseCitation(href);
+  if (!citation) {
+    return (
+      <a href={href} rel="noreferrer" target="_blank" {...props}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <DocumentLink chunkId={citation.chunkId} docId={citation.docId}>
+      {children}
+    </DocumentLink>
+  );
+}
+
+const RESPONSE_COMPONENTS = { a: CitationAnchor };
 
 /** Lo que el agente contestó, y qué componentes activó al hacerlo. */
 export type Turn = {
@@ -28,6 +53,8 @@ export type Turn = {
   readonly cost?: Cost;
   readonly status?: string;
   readonly error?: string;
+  /** `doc_id` → `chunk_id`: a qué fragmento lleva cada cita del texto. */
+  readonly anchors?: Record<string, string>;
 };
 
 const SUGGESTIONS = [
@@ -110,7 +137,11 @@ export function ChatPanel({
                     {turn.error ? (
                       <span className="text-muted-foreground text-[11px]">{turn.error}</span>
                     ) : (
-                      turn.answer
+                      // Markdown, y cada cita enlazada a su fragmento: la viñeta que afirma algo y
+                      // el texto que lo sustenta quedan a un clic.
+                      <MessageResponse components={RESPONSE_COMPONENTS}>
+                        {linkCitations(turn.answer ?? "", turn.anchors ?? {})}
+                      </MessageResponse>
                     )}
                   </MessageContent>
                 </Message>
@@ -130,7 +161,12 @@ export function ChatPanel({
               </div>
             ))
           )}
-          {pending ? <p className="text-muted-foreground px-1 text-[11px]">Consultando el corpus…</p> : null}
+          {/* Mientras el agente trabaja: el texto se mueve, así se distingue de una respuesta corta. */}
+          {pending ? (
+            <Shimmer as="p" className="px-1 text-[11px]" duration={1.6}>
+              Consultando el corpus…
+            </Shimmer>
+          ) : null}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>

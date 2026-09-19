@@ -232,13 +232,14 @@ async def timeline(
     inventar una fecha desde el texto seria presentar una variable sin sustento."""
     value = phenomenon.value if phenomenon else None
     dated, total = await timeline_db.coverage(pool, value)
-    rows = await timeline_db.by_period(pool, value, entity)
+    series, points = await timeline_db.by_period(pool, value, entity)
     return Timeline(
         phenomenon=value,
         entity=entity,
         dated_documents=dated,
         total_documents=total,
-        points=[TimelinePoint(year=row["year"], documents=row["documents"]) for row in rows],
+        series=series,
+        points=[TimelinePoint(**point) for point in points],
     )
 
 

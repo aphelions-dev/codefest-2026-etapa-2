@@ -88,6 +88,8 @@ class Toolbox:
                         "doc_id": fragment.doc_id,
                         "chunk_id": fragment.chunk_id,
                         "observatory": fragment.observatory,
+                        "phenomenon": fragment.phenomenon,
+                        "similarity": round(fragment.similarity, 3),
                         "text": fragment.context or fragment.text,
                     }
                     for fragment in fragments
@@ -290,11 +292,12 @@ class Toolbox:
     def _timeline(self) -> Tool:
         async def run(phenomenon: int | None = None, entity: str | None = None) -> dict:
             dated, total = await timeline_db.coverage(self.pool, phenomenon)
-            rows = await timeline_db.by_period(self.pool, phenomenon, entity)
+            series, points = await timeline_db.by_period(self.pool, phenomenon, entity)
             return {
                 "dated_documents": dated,
                 "total_documents": total,
-                "points": [{"year": row["year"], "documents": row["documents"]} for row in rows],
+                "sources": series,
+                "points": [{"year": point["year"], "documents": point["total"]} for point in points],
             }
 
         return Tool(

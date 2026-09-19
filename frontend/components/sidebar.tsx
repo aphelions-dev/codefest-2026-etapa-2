@@ -100,8 +100,10 @@ export function Sidebar({
       {open ? (
         <>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3" data-ranking-scroll>
+            {/* El ranking va suelto en la barra, sin tarjeta: ya está dentro de un panel con su
+                borde, y una caja dentro de otra solo añade ruido. */}
             {features.length > 0 ? (
-              <div className="border-border/60 space-y-2 rounded-xl border p-3">
+              <div className="space-y-2">
                 <SectionHeader
                   aside={`${features.length}`}
                   info="Documentos distintos del corpus que nombran cada territorio, del más citado al menos. Tocar uno lo fija en el mapa y abre su ficha con la evidencia."

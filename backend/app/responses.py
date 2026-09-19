@@ -171,15 +171,23 @@ class Places(BaseModel):
 
 
 class TimelinePoint(BaseModel):
+    """Un ano: el total y cuanto aporto cada fuente, para apilar la barra."""
+
     year: int
-    documents: int
+    total: int
+    sources: dict[str, int]
 
 
 class Timeline(BaseModel):
-    """Evolucion temporal. `dated` y `total` dicen sobre cuantos documentos se puede afirmar algo."""
+    """Evolucion temporal por fuente.
+
+    `dated` y `total` dicen sobre cuantos documentos se puede afirmar algo; `series` son las fuentes
+    que tienen barra propia, en el orden en que se apilan.
+    """
 
     phenomenon: int | None = None
     entity: str | None = None
     dated_documents: int
     total_documents: int
+    series: list[str]
     points: list[TimelinePoint]

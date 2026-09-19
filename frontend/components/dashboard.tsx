@@ -102,8 +102,11 @@ export function Dashboard() {
   const onAsk = async (question: string) => {
     setPending(true);
     try {
-      const { answer, activations: chosen, steps, cost, status } = await ask(question);
-      setTurns((previous) => [...previous, { question, answer, activations: chosen, steps, cost, status }]);
+      const { answer, activations: chosen, steps, cost, status, anchors } = await ask(question);
+      setTurns((previous) => [
+        ...previous,
+        { question, answer, activations: chosen, steps, cost, status, anchors },
+      ]);
       // Lo que el agente activó reemplaza la vista: el tablero no muestra todo a la vez.
       if (chosen.length > 0) {
         setActivations(chosen);
