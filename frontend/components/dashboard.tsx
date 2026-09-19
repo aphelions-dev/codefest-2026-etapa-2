@@ -203,7 +203,7 @@ export function Dashboard() {
 
       {/* La serie temporal, anclada abajo entre la barra y el analista: necesita anchura para leerse. */}
       <div
-        className="absolute bottom-0 z-10"
+        className="absolute bottom-0 z-10 transition-[left,right] duration-200"
         ref={strip}
         style={{ left: sidebarWidth, right: chatWidth }}
       >
@@ -218,7 +218,10 @@ export function Dashboard() {
       </div>
 
       {/* El analista, anclado al borde derecho. */}
-      <div className="absolute inset-y-0 right-0 z-20" style={{ width: chatWidth }}>
+      <div
+        className="absolute inset-y-0 right-0 z-20 transition-[width] duration-200"
+        style={{ width: chatWidth }}
+      >
         <ChatPanel
           collapsed={!chatOpen}
           onAsk={onAsk}

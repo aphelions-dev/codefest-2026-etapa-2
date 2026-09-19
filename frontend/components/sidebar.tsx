@@ -78,7 +78,12 @@ export function Sidebar({
 }) {
   return (
     <aside
-      className={cn(GLASS, "border-border/60 absolute inset-y-0 left-0 z-20 flex flex-col border-r")}
+      className={cn(
+        GLASS,
+        "border-border/60 absolute inset-y-0 left-0 z-20 flex flex-col border-r",
+        // La misma duración con que el mapa anima su encuadre: panel y cámara se mueven juntos.
+        "transition-[width] duration-200",
+      )}
       style={{ width: open ? SIDEBAR_OPEN : SIDEBAR_RAIL }}
     >
       <header

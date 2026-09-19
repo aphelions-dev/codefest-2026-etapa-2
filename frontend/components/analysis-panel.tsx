@@ -71,6 +71,7 @@ export function AnalysisPanel({
         className={cn(
           GLASS,
           "border-border/60 absolute top-3 z-10 flex flex-col gap-2 overflow-hidden rounded-xl border p-2 shadow-2xl shadow-black/50",
+          "transition-[left,right,bottom] duration-200",
         )}
         style={{ left: leftInset + 12, right: rightInset + 12, bottom: bottomInset + 12 }}
       >

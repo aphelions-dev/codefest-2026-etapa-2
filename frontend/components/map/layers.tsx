@@ -113,7 +113,8 @@ export function FitToGeometry({
 }: {
   readonly geometry: GeoJSON.Geometry;
   readonly maxZoom: number;
-  readonly padding: { top: number; right: number; bottom: number; left: number };
+  /** Respiro alrededor del territorio; el hueco entre paneles lo pone `FitToPanels`. */
+  readonly padding: number;
 }) {
   const { map, isLoaded } = useMap();
   useEffect(() => {
@@ -124,5 +125,49 @@ export function FitToGeometry({
     // El relleno cambia al plegar paneles; eso no debe volver a mover la cámara.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, isLoaded, geometry, maxZoom]);
+  return null;
+}
+
+/**
+ * Mantiene la cámara dentro del hueco que dejan los paneles.
+ *
+ * El lienzo ocupa la pantalla entera y los paneles se apoyan encima, así que su tamaño nunca
+ * cambia y `map.resize()` no se entera de nada: plegar la barra dejaba el centro del mapa detrás
+ * de un panel. El `padding` de MapLibre desplaza el centro **efectivo** sin tocar el lienzo, y
+ * todas las operaciones de cámara —`fitBounds`, `easeTo`, el zoom de los controles— lo respetan.
+ *
+ * Se anima con la misma duración que el plegado del panel, para que el mapa acompañe al panel en
+ * vez de dar un salto cuando este termina de moverse.
+ */
+export function FitToPanels({
+  left,
+  right,
+  bottom,
+  top = 0,
+}: {
+  readonly left: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly top?: number;
+}) {
+  const { map, isLoaded } = useMap();
+
+  useEffect(() => {
+    if (!map || !isLoaded) return;
+    // Nunca más de un tercio por lado: con la ventana estrecha, un padding mayor que el lienzo
+    // deja a MapLibre sin área donde encuadrar y la cámara se vuelve inestable.
+    const limit = (value: number, extent: number) => Math.min(Math.max(value, 0), extent / 3);
+    const { width, height } = map.getContainer().getBoundingClientRect();
+    map.easeTo({
+      padding: {
+        left: limit(left, width),
+        right: limit(right, width),
+        bottom: limit(bottom, height),
+        top: limit(top, height),
+      },
+      duration: 200,
+    });
+  }, [map, isLoaded, left, right, bottom, top]);
+
   return null;
 }

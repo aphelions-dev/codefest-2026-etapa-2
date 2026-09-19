@@ -6,6 +6,7 @@ import {
   ChoroplethLayer,
   choroplethPaint,
   FitToGeometry,
+  FitToPanels,
   MapResizer,
   SelectionOutline,
   type Shapes,
@@ -104,6 +105,8 @@ export function MapBackdrop({
         zoom={camera.zoom}
       >
         <MapResizer />
+        {/* La cámara vive en el hueco entre paneles, no en el centro del lienzo. */}
+        <FitToPanels bottom={bottomInset} left={leftInset} right={rightInset} top={12} />
         <MapControls className="!right-(--map-right)" position="top-right" />
         {shapes && steps.length > 0 ? (
           <ChoroplethLayer<MapDatum>
@@ -139,8 +142,9 @@ export function MapBackdrop({
             <FitToGeometry
               geometry={selected.geometry}
               maxZoom={zoom}
-              // Los paneles tapan los bordes: el territorio se encuadra en el hueco que queda libre.
-              padding={{ top: 48, right: rightInset + 48, bottom: bottomInset + 48, left: leftInset + 48 }}
+              // Un respiro alrededor del territorio; el hueco entre paneles ya lo pone `FitToPanels`
+              // como padding de la cámara, así que aquí no hay que volver a descontarlo.
+              padding={48}
             />
           </>
         ) : null}
@@ -161,7 +165,9 @@ export function MapBackdrop({
           />
         ) : null}
 
-        <div className="absolute top-3 left-3 w-80 space-y-2">
+        {/* La ficha se ancla al borde del hueco, no al del lienzo: al plegar la barra se
+            desplaza con él en vez de quedarse debajo del panel. */}
+        <div className="absolute top-3 left-3 w-80 max-w-[calc(100%-1.5rem)] space-y-2">
           <PlaceCard
             collapsed={collapsed}
             color={ramp[2]}
