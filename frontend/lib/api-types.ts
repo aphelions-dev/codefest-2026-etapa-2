@@ -976,6 +976,10 @@ export interface operations {
                 by: components["schemas"]["BreakdownField"];
                 /** @description Limitar a un fenomeno */
                 phenomenon?: components["schemas"]["Phenomenon"] | null;
+                /** @description Primer dia del periodo (ISO 8601); sin el, desde el principio */
+                date_from?: string | null;
+                /** @description Ultimo dia del periodo (ISO 8601); sin el, hasta el final */
+                date_to?: string | null;
             };
             header?: never;
             path?: never;
@@ -1047,6 +1051,10 @@ export interface operations {
                 cols?: components["schemas"]["MatrixColumn"];
                 /** @description Limitar a un fenomeno */
                 phenomenon?: components["schemas"]["Phenomenon"] | null;
+                /** @description Primer dia del periodo (ISO 8601); sin el, desde el principio */
+                date_from?: string | null;
+                /** @description Ultimo dia del periodo (ISO 8601); sin el, hasta el final */
+                date_to?: string | null;
             };
             header?: never;
             path?: never;
@@ -1083,6 +1091,10 @@ export interface operations {
                 phenomenon?: components["schemas"]["Phenomenon"] | null;
                 /** @description Documentos compartidos minimos */
                 min_documents?: number;
+                /** @description Primer dia del periodo (ISO 8601); sin el, desde el principio */
+                date_from?: string | null;
+                /** @description Ultimo dia del periodo (ISO 8601); sin el, hasta el final */
+                date_to?: string | null;
             };
             header?: never;
             path?: never;

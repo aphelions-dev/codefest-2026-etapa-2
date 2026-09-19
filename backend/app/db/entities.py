@@ -1,6 +1,10 @@
 """Consultas sobre las menciones de entidades: la matriz de calor y la red de co-ocurrencia."""
 
+from datetime import date
+
 import asyncpg
+
+from app.db import period
 
 MATRIX_ROWS = 18
 GRAPH_NODES = 40
@@ -15,15 +19,22 @@ MATRIX_COLUMNS = {
 }
 
 
-async def matrix(pool: asyncpg.Pool, cols: str, phenomenon: int | None) -> list[asyncpg.Record]:
+async def matrix(
+    pool: asyncpg.Pool,
+    cols: str,
+    phenomenon: int | None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> list[asyncpg.Record]:
     """Entidades contra una segunda categoria, con el documento que sustenta cada celda.
 
     Las filas se acotan a las entidades mas presentes: una cuadricula de cientos de celdas no se
     lee, y el grafico tiene que resolver la tarea, no lucirla.
     """
     column = MATRIX_COLUMNS[cols]
+    args: list[object] = [phenomenon] if phenomenon is not None else []
     limit = "and m.phenomenon = $1" if phenomenon is not None else ""
-    args = [phenomenon] if phenomenon is not None else []
+    limit += period.documents("m.doc_id", date_from, date_to, args)
 
     async with pool.acquire() as connection:
         return await connection.fetch(
@@ -55,7 +66,12 @@ async def matrix(pool: asyncpg.Pool, cols: str, phenomenon: int | None) -> list[
 
 
 async def cooccurrence(
-    pool: asyncpg.Pool, entity_id: str | None, phenomenon: int | None, min_documents: int
+    pool: asyncpg.Pool,
+    entity_id: str | None,
+    phenomenon: int | None,
+    min_documents: int,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> tuple[list[asyncpg.Record], list[asyncpg.Record]]:
     """Dos entidades se conectan si comparten documentos; el peso es cuantos comparten.
 
@@ -63,8 +79,9 @@ async def cooccurrence(
     que nadie extrajo, y cada arista se puede sustentar con los documentos que la producen. La
     traza de la arista es el fragmento mas denso de la primera entidad en uno de esos documentos.
     """
+    phen_args: list[object] = [phenomenon] if phenomenon is not None else []
     phen = "and m.phenomenon = $1" if phenomenon is not None else ""
-    phen_args = [phenomenon] if phenomenon is not None else []
+    phen += period.documents("m.doc_id", date_from, date_to, phen_args)
 
     edge_args = [*phen_args, min_documents]
     focus = ""

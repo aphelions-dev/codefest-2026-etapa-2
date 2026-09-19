@@ -4,17 +4,25 @@ El campo llega como enumeracion y se interpola en el nombre de la columna, nunca
 una columna no puede ir como parametro de la consulta.
 """
 
+from datetime import date
+
 import asyncpg
 
+from app.db import period
 from app.params import BreakdownField
 
 
 async def by_field(
-    pool: asyncpg.Pool, field: BreakdownField, phenomenon: int | None
+    pool: asyncpg.Pool,
+    field: BreakdownField,
+    phenomenon: int | None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> tuple[int, int, list[asyncpg.Record]]:
     column = field.value
-    where = "where phenomenon = $1" if phenomenon is not None else ""
-    args = [phenomenon] if phenomenon is not None else []
+    args: list[object] = [phenomenon] if phenomenon is not None else []
+    where = "where phenomenon = $1" if phenomenon is not None else "where true"
+    where += period.documents("fragments.doc_id", date_from, date_to, args)
 
     async with pool.acquire() as connection:
         totals = await connection.fetchrow(

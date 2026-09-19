@@ -71,10 +71,12 @@ async def metadata_breakdown(
     pool: Pool,
     by: BreakdownField = Query(description="Campo por el que agrupar"),
     phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+    date_from: DateFrom = None,
+    date_to: DateTo = None,
 ) -> Breakdown:
     """Alimenta el componente de barras: comparacion, distribucion y composicion."""
     value = phenomenon.value if phenomenon else None
-    fragments, documents, rows = await breakdown_db.by_field(pool, by, value)
+    fragments, documents, rows = await breakdown_db.by_field(pool, by, value, date_from, date_to)
     return Breakdown(
         field=by.value,
         phenomenon=value,
@@ -147,10 +149,12 @@ async def entity_matrix(
     pool: Pool,
     cols: MatrixColumn = Query(default=MatrixColumn.observatory, description="Segunda categoria"),
     phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+    date_from: DateFrom = None,
+    date_to: DateTo = None,
 ) -> Matrix:
     """Cruza las entidades mas presentes con otra categoria: que entidad domina cada fuente."""
     value = phenomenon.value if phenomenon else None
-    rows = await entities_db.matrix(pool, cols.value, value)
+    rows = await entities_db.matrix(pool, cols.value, value, date_from, date_to)
     cells = [
         MatrixCell(
             row_id=row["row_id"],
@@ -180,10 +184,14 @@ async def entity_cooccurrence(
     entity: str | None = Query(default=None, description="Centrar la red en una entidad"),
     phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
     min_documents: int = Query(default=3, ge=1, le=100, description="Documentos compartidos minimos"),
+    date_from: DateFrom = None,
+    date_to: DateTo = None,
 ) -> Graph:
     """Que entidades aparecen juntas, y en cuantos documentos."""
     value = phenomenon.value if phenomenon else None
-    nodes, edges = await entities_db.cooccurrence(pool, entity, value, min_documents)
+    nodes, edges = await entities_db.cooccurrence(
+        pool, entity, value, min_documents, date_from, date_to
+    )
     return Graph(
         phenomenon=value,
         min_documents=min_documents,
