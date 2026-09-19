@@ -91,6 +91,7 @@ async def metadata_breakdown(
                 label=row["label"] or "sin dato",
                 fragments=row["fragments"],
                 documents=row["documents"],
+                trace=Trace(doc_id=row["sample_doc"], chunk_id=row["sample_chunk"]),
             )
             for row in rows
         ],
@@ -267,6 +268,7 @@ async def entity_cooccurrence(
                 name=node["name"],
                 type=node["type"],
                 documents=node["documents"],
+                trace=Trace(doc_id=node["sample_doc"], chunk_id=node["sample_chunk"]),
             )
             for node in nodes
         ],
@@ -336,7 +338,15 @@ async def timeline(
         dated_documents=dated,
         total_documents=total,
         series=series,
-        points=[TimelinePoint(**point) for point in points],
+        points=[
+            TimelinePoint(
+                year=point["year"],
+                total=point["total"],
+                sources=point["sources"],
+                trace=Trace(doc_id=point["sample_doc"], chunk_id=point["sample_chunk"]),
+            )
+            for point in points
+        ],
     )
 
 
@@ -431,7 +441,11 @@ async def presence(
         without_information=counts["without_information"],
         matching=counts["matching"],
         groups=[
-            ArmedGroup(name=row["name"], municipalities=row["municipalities"])
+            ArmedGroup(
+                name=row["name"],
+                municipalities=row["municipalities"],
+                trace=Trace(doc_id=row["sample_doc"], chunk_id=row["sample_chunk"]),
+            )
             for row in await presence_db.catalogue(pool)
         ],
         features=[
@@ -528,6 +542,7 @@ async def alerts(
                 alerts=row["alerts"],
                 imminent=row["imminent"],
                 structural=row["structural"],
+                trace=Trace(doc_id=row["sample_doc"], chunk_id=row["sample_chunk"]),
             )
             for row in await alerts_db.by_year(pool, kind, entity, date_from, date_to)
         ],

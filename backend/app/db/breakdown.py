@@ -33,7 +33,9 @@ async def by_field(
             f"""
             select {column}::text as label,
                    count(*) as fragments,
-                   count(distinct doc_id) as documents
+                   count(distinct doc_id) as documents,
+                   (array_agg(doc_id   order by doc_id, position))[1] as sample_doc,
+                   (array_agg(chunk_id order by doc_id, position))[1] as sample_chunk
             from fragments
             {where}
             group by {column}

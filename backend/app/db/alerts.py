@@ -117,7 +117,9 @@ async def by_year(
             select extract(year from w.issued_on)::int                                as year,
                    count(distinct w.doc_id)::int                                      as alerts,
                    count(distinct w.doc_id) filter (where w.kind = 'Inminencia')::int  as imminent,
-                   count(distinct w.doc_id) filter (where w.kind = 'Estructural')::int as structural
+                   count(distinct w.doc_id) filter (where w.kind = 'Estructural')::int as structural,
+                   (array_agg(w.doc_id   order by w.issued_on desc))[1]              as sample_doc,
+                   (array_agg(w.chunk_id order by w.issued_on desc))[1]              as sample_chunk
             from early_warnings w
             {join}
             where {" and ".join(conditions)}{dated}

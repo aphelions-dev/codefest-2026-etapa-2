@@ -33,6 +33,8 @@ import {
   usePeriod,
   wholeYear,
 } from "@/lib/period";
+import { DocumentLink } from "@/components/document-view";
+import { chunkLabel } from "@/components/highlight";
 import { useApi } from "@/lib/use-api";
 import { cn } from "@/lib/utils";
 
@@ -125,6 +127,13 @@ export function TimelineStrip({
         ...point.sources,
       }));
   const rows = continuous(raw);
+  // Con un año elegido, un documento suyo: la barra del año también lleva a su origen.
+  const years = showAlerts ? (alerts.data?.years ?? []) : (data?.points ?? []);
+  const chosenYear =
+    period.from && period.to && period.from.slice(0, 4) === period.to.slice(0, 4) && period.from.endsWith("-01") && period.to.endsWith("-12")
+      ? Number(period.from.slice(0, 4))
+      : null;
+  const sample = years.find((point) => point.year === chosenYear)?.trace;
   const empty = (showAlerts ? alerts.data : data) !== null && rows.length === 0;
   const appearances = (focused?.points ?? []).filter((point) => point.total > 0).length;
 
@@ -324,7 +333,16 @@ export function TimelineStrip({
                     <span className="truncate">{entity.replaceAll("-", " ")}</span>
                   </li>
                 ) : null}
-                <li className="text-muted-foreground/70 pt-1 leading-snug">Clic en un año para filtrarlo</li>
+                {sample ? (
+                  <li className="text-muted-foreground pt-1 leading-snug">
+                    Un documento de {chosenYear}:{" "}
+                    <DocumentLink chunkId={sample.chunk_id} docId={sample.doc_id}>
+                      {sample.doc_id} · {chunkLabel(sample.chunk_id)}
+                    </DocumentLink>
+                  </li>
+                ) : (
+                  <li className="text-muted-foreground/70 pt-1 leading-snug">Clic en un año para filtrarlo y ver un documento suyo</li>
+                )}
               </ul>
             </>
           )}

@@ -35,7 +35,15 @@ const TYPE_LABEL: Record<string, string> = {
 const SHOWN = 26;
 const INNER_RING = 12;
 
-type Positioned = { id: string; name: string; type: string; documents: number; x: number; y: number };
+type Positioned = {
+  id: string;
+  name: string;
+  type: string;
+  documents: number;
+  trace: { doc_id: string; chunk_id: string };
+  x: number;
+  y: number;
+};
 
 /**
  * Red de co-ocurrencia con disposición radial (B.3.2): la entidad de interés al centro y el resto en
@@ -93,7 +101,13 @@ export function Graph({
     const cy = size.height / 2;
     const radius = Math.min(cx, cy) - 30;
     nodes = placed.map((node, index) => {
-      const common = { id: node.entity_id, name: node.name, type: node.type, documents: node.documents };
+      const common = {
+        id: node.entity_id,
+        name: node.name,
+        type: node.type,
+        documents: node.documents,
+        trace: node.trace,
+      };
       if (index === 0) return { ...common, x: cx, y: cy };
       const inner = index <= INNER_RING;
       const count = inner ? INNER_RING : Math.max(placed.length - INNER_RING - 1, 1);
@@ -118,7 +132,7 @@ export function Graph({
     <Panel
       source={
         data
-          ? `${nodes.length} entidades y ${edges.length} relaciones. Tocar una entidad filtra todo el tablero y deja ver sus vecinas; tocar una arista abre el fragmento que la sustenta.`
+          ? `${nodes.length} entidades y ${edges.length} relaciones. Un clic en una entidad filtra todo el tablero y la centra con sus vecinas; doble clic abre el fragmento que más la nombra. Una arista abre el fragmento que la sustenta.`
           : undefined
       }
       title="Entidades que aparecen juntas"
@@ -208,9 +222,10 @@ export function Graph({
                   className="cursor-pointer"
                   key={node.id}
                   onClick={() => onEntity(focus === node.id ? null : node.id)}
+                  onDoubleClick={() => open(node.trace.doc_id, node.trace.chunk_id)}
                   opacity={dimmed ? 0.18 : 1}
                 >
-                  <title>{`${node.name}: ${node.documents} documentos`}</title>
+                  <title>{`${node.name}: ${node.documents} documentos · doble clic abre ${node.trace.doc_id}`}</title>
                   <circle cx={node.x} cy={node.y} fill={TYPE_COLOR[node.type] ?? "var(--primary)"} r={r} />
                   <text
                     className="pointer-events-none"

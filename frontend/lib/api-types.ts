@@ -373,6 +373,7 @@ export interface components {
             imminent: number;
             /** Structural */
             structural: number;
+            trace: components["schemas"]["Trace"];
         };
         /**
          * Alerts
@@ -407,6 +408,7 @@ export interface components {
             name: string;
             /** Municipalities */
             municipalities: number;
+            trace: components["schemas"]["Trace"];
         };
         /**
          * Breakdown
@@ -435,6 +437,7 @@ export interface components {
             fragments: number;
             /** Documents */
             documents: number;
+            trace: components["schemas"]["Trace"];
         };
         /**
          * BreakdownField
@@ -601,6 +604,7 @@ export interface components {
             type: string;
             /** Documents */
             documents: number;
+            trace: components["schemas"]["Trace"];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -989,6 +993,7 @@ export interface components {
             sources: {
                 [key: string]: number;
             };
+            trace: components["schemas"]["Trace"];
         };
         /** Tokens */
         Tokens: {

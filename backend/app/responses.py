@@ -20,6 +20,8 @@ class BreakdownBucket(BaseModel):
     label: str
     fragments: int
     documents: int
+    # Un documento que la cifra cuenta, en un fragmento suyo: toda cifra del tablero lleva a su origen.
+    trace: Trace
 
 
 class Breakdown(BaseModel):
@@ -121,6 +123,8 @@ class GraphNode(BaseModel):
     name: str
     type: str
     documents: int
+    # El fragmento que mas veces nombra la entidad.
+    trace: Trace
 
 
 class GraphEdge(BaseModel):
@@ -251,6 +255,8 @@ class Municipality(BaseModel):
 class ArmedGroup(BaseModel):
     name: str
     municipalities: int
+    # El registro de uno de sus municipios, el de mas poblacion.
+    trace: Trace
 
 
 class Presence(BaseModel):
@@ -301,6 +307,8 @@ class AlertYear(BaseModel):
     alerts: int
     imminent: int
     structural: int
+    # La ultima alerta emitida ese ano.
+    trace: Trace
 
 
 class Alert(BaseModel):
@@ -384,6 +392,8 @@ class TimelinePoint(BaseModel):
     year: int
     total: int
     sources: dict[str, int]
+    # Un documento publicado ese ano, en su primer fragmento.
+    trace: Trace
 
 
 class Timeline(BaseModel):

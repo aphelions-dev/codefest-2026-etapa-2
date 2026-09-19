@@ -120,7 +120,9 @@ async def cooccurrence(
         )
         nodes = await connection.fetch(
             f"""
-            select e.entity_id, e.name, e.type, count(distinct m.doc_id)::int as documents
+            select e.entity_id, e.name, e.type, count(distinct m.doc_id)::int as documents,
+                   (array_agg(m.doc_id   order by m.mentions desc))[1] as sample_doc,
+                   (array_agg(m.chunk_id order by m.mentions desc))[1] as sample_chunk
             from entity_mentions m
             join entities e using (entity_id)
             where true {phen}

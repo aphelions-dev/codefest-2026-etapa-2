@@ -98,11 +98,19 @@ export function useLayerFilter() {
   return useQueryState("capa", parseAsString);
 }
 
+/** Un valor del filtro propio de la capa, con cuántos registra y un registro que lo muestra. */
+export type LayerOption = {
+  readonly value: string;
+  readonly label: string;
+  readonly count: number;
+  readonly trace?: { readonly doc_id: string; readonly chunk_id: string };
+};
+
 type Layer = {
   readonly data: readonly MapDatum[];
   readonly guide: MapGuide;
   /** Los valores que puede tomar el filtro propio de la vista, con su conteo. */
-  readonly options: readonly { readonly value: string; readonly label: string; readonly count: number }[];
+  readonly options: readonly LayerOption[];
   /** Lo que la vista declara sobre su propia cobertura, bajo el gráfico. */
   readonly coverage: string;
   /** Si el filtro global por entidad recorta esta vista: no todas salen del corpus. */
@@ -259,6 +267,7 @@ export function useMapLayer(
           value: group.name,
           label: group.name === "Otros" ? "Otros grupos" : group.name,
           count: group.municipalities,
+          trace: group.trace,
         })),
       coverage: presence.data
         ? `${formatNumber(presence.data.with_presence)} municipios con presencia y ${formatNumber(presence.data.without_information)} sin investigar, de ${formatNumber(presence.data.municipalities)}`

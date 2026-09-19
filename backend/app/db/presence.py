@@ -25,8 +25,11 @@ async def catalogue(pool: asyncpg.Pool) -> list[asyncpg.Record]:
     async with pool.acquire() as connection:
         return await connection.fetch(
             """
-            select unnest(groups) as name, count(*)::int as municipalities
-            from armed_presence
+            select g as name,
+                   count(*)::int as municipalities,
+                   (array_agg(doc_id   order by population desc nulls last))[1] as sample_doc,
+                   (array_agg(chunk_id order by population desc nulls last))[1] as sample_chunk
+            from armed_presence, unnest(groups) as g
             group by 1
             order by 2 desc
             """

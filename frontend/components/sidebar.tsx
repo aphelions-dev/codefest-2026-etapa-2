@@ -2,6 +2,7 @@
 
 import {
   BrainCircuitIcon,
+  FileSearchIcon,
   FileTextIcon,
   GlobeIcon,
   LayersIcon,
@@ -35,8 +36,10 @@ import {
   VIEW_LABEL,
   VIEW_PHENOMENON,
   VIEW_PLACES,
+  type LayerOption,
   VIEW_SCOPE,
 } from "@/lib/map-layers";
+import { DocumentLink } from "@/components/document-view";
 import { cn } from "@/lib/utils";
 
 /** Un icono por fenómeno y por capa: el mismo en la barra abierta y en el riel. */
@@ -86,7 +89,7 @@ export function Sidebar({
   readonly onLevel: (level: MapLevel) => void;
   readonly onFilter: (value: string | null) => void;
   /** Los valores del filtro propio de la vista, con cuántos registra cada uno. */
-  readonly options: readonly { readonly value: string; readonly label: string; readonly count: number }[];
+  readonly options: readonly LayerOption[];
   /** Los territorios de la vista activa del mapa, ya ordenados por su cifra. */
   readonly places: readonly MapDatum[];
   /** Lo que la vista declara sobre su propia cobertura, al pie del ranking. */
@@ -366,7 +369,7 @@ function FilterButton({
   );
 }
 
-type Option = { readonly value: string; readonly label: string; readonly count: number };
+type Option = LayerOption;
 
 const SEGMENT = "flex flex-1 items-center justify-center gap-1.5 rounded px-2 py-1 text-[11px] transition-colors";
 const segment = (active: boolean) =>
@@ -466,7 +469,7 @@ function GroupBars({
           const selected = filter === option.value;
           const dimmed = filter !== null && !selected;
           return (
-            <li key={option.value}>
+            <li className="flex items-center gap-0.5" key={option.value}>
               <button
                 aria-pressed={selected}
                 className={cn(
@@ -485,6 +488,18 @@ function GroupBars({
                 <span className="relative min-w-0 flex-1 truncate">{option.label}</span>
                 <span className="relative font-mono text-[10px]">{option.count}</span>
               </button>
+              {/* La cifra lleva a un registro real de la fuente, como toda cifra del tablero. */}
+              {option.trace ? (
+                <DocumentLink
+                  aria-label={`Ver un registro de ${option.label}`}
+                  chunkId={option.trace.chunk_id}
+                  className="text-muted-foreground hover:text-primary rounded p-1 no-underline"
+                  docId={option.trace.doc_id}
+                  title={`Un municipio con ${option.label}: ${option.trace.doc_id}`}
+                >
+                  <FileSearchIcon className="size-3" />
+                </DocumentLink>
+              ) : null}
             </li>
           );
         })}

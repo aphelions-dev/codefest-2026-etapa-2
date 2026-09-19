@@ -7,6 +7,7 @@ import type { Breakdown } from "@/lib/api";
 import { phenomenonColor } from "@/lib/filters";
 import { periodParams, usePeriod } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
+import { useDocument } from "@/lib/use-document";
 
 const FIELD_LABEL: Record<string, string> = {
   phenomenon: "fenómeno",
@@ -18,6 +19,7 @@ const FIELD_LABEL: Record<string, string> = {
 /** Comparacion y composicion sobre la metadata. Barras porque la tarea es comparar cantidades. */
 export function Bars({ by, phenomenon }: { readonly by: string; readonly phenomenon: number | null }) {
   const [period] = usePeriod();
+  const { open } = useDocument();
   const { data, error, loading } = useApi<Breakdown>("/metadata/breakdown", {
     by,
     phenomenon: phenomenon ?? undefined,
@@ -28,7 +30,11 @@ export function Bars({ by, phenomenon }: { readonly by: string; readonly phenome
     <Panel
       title={`Documentos por ${FIELD_LABEL[by] ?? by}`}
       unit="Documentos distintos del corpus"
-      source={data ? `${data.total_documents.toLocaleString("es")} documentos, ${data.total_fragments.toLocaleString("es")} fragmentos` : undefined}
+      source={
+        data
+          ? `${data.total_documents.toLocaleString("es")} documentos, ${data.total_fragments.toLocaleString("es")} fragmentos. Una barra abre uno de sus documentos.`
+          : undefined
+      }
     >
       {!data ? (
         <PanelState loading={loading} error={error} empty="Sin datos" />
@@ -47,7 +53,16 @@ export function Bars({ by, phenomenon }: { readonly by: string; readonly phenome
               }}
               formatter={(value) => [Number(value).toLocaleString("es"), "documentos"] as [string, string]}
             />
-            <Bar dataKey="documents" fill={phenomenonColor(phenomenon)} radius={[0, 3, 3, 0]} />
+            <Bar
+              className="cursor-pointer"
+              dataKey="documents"
+              fill={phenomenonColor(phenomenon)}
+              onClick={(item: { payload?: { trace?: { doc_id: string; chunk_id: string } } }) => {
+                const trace = item.payload?.trace;
+                if (trace) open(trace.doc_id, trace.chunk_id);
+              }}
+              radius={[0, 3, 3, 0]}
+            />
           </BarChart>
         </ResponsiveContainer>
       )}
