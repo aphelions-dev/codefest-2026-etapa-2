@@ -399,6 +399,25 @@ puede compartir exactamente lo que está mirando y el botón de atrás funciona:
 Cada vista declara lo que un filtro **no** alcanza en vez de ignorarlo: la presencia armada no está
 fechada ni sale del corpus, y su ficha lo dice.
 
+### 3.6.1 El agente generador de visualizaciones
+
+Es el tercer agente de la §1.2 y el que se evalúa en la ejecución dinámica (§3.3). Una llamada al
+modelo barato con salida estructurada elige de uno a tres componentes y sus filtros —fenómeno,
+nivel territorial, capa del mapa, entidad y periodo—; **no elige los datos**, que resuelven los
+mismos endpoints de agregación que pintan el tablero, con su traza. Todo lo que devuelve se valida
+en código contra listas cerradas: una herramienta, un campo o una entidad que no existen se
+descartan. La pregunta viaja delimitada y declarada como datos, como en el resto de agentes.
+
+Corre **en paralelo** al analista y solo en `POST /chat/stream`, que es lo que usan el tablero y el
+chat: decide mientras el analista busca y redacta, así que no suma latencia, y el `POST /chat` que
+evalúa el Reto 1 no paga ni un token por él. `/chat/stream` emite por SSE cada agente en cuanto
+termina —el chat enseña el razonamiento en vivo— y termina con la respuesta completa, con el mismo
+contrato de la §2.4.
+
+Lo que elige se aplica **antes que el texto**: el mapa cambia de capa, nivel, fenómeno y periodo,
+el diálogo se abre en los componentes elegidos, y la respuesta del chat los dibuja como gráficas
+interactivas dentro de ella.
+
 ### 3.7 Disposición: el mapa como lienzo
 
 El tablero usa un **maestro-detalle** (B.6.1): el mapa ocupa la pantalla y los paneles se anclan a
@@ -459,7 +478,6 @@ contaba algo que no era el territorio:
 | Extracción de entidades con LLM | 1.813 documentos por inferencia se comen el presupuesto. Se extraen por diccionario y coincidencia de texto, que para nombres propios no necesita razonamiento |
 | Reranker sobre la recuperación | Medido contra el ground truth de la Etapa 1, empeoraba el resultado |
 | Reintentos automáticos ante error de red o del proxy | Cada reintento contaría como interacción en el bloque de eficiencia. El único ciclo que repite es el del verificador (§2.2), que es una decisión de calidad y tiene tope |
-| Agente generador de visualizaciones | El equipo decidió centrar esta entrega en el Reto 1. El tablero funciona con sus filtros y sus datos, pero **el agente no activa componentes**: el registro y los nombres de herramienta quedan preparados para que añadirlo sea un nodo más |
 
 ---
 

@@ -153,6 +153,86 @@
           }
         }
       ]
+    },
+    {
+      "id": "visualizer",
+      "nombre": "Generador de visualizaciones",
+      "descripcion": "Decide, a partir de la pregunta, que componentes del tablero la responden y con que filtros: fenomeno, nivel territorial, capa del mapa, entidad y periodo. No elige los datos, que resuelven los endpoints de agregacion con su traza a doc_id y chunk_id. Corre en paralelo al analista en POST /chat/stream, que es lo que usa el tablero.",
+      "modelo": "gpt-oss-20b",
+      "proveedor": "LiteLLM (Amazon Bedrock)",
+      "activado_por": "orquestador",
+      "ejemplos_de_activacion": [
+        "Que departamentos concentran las alertas tempranas en los ultimos 12 meses?",
+        "Que actores aparecen junto al Clan del Golfo?"
+      ],
+      "tools": [
+        {
+          "name": "get_places",
+          "descripcion": "Mapa coropletico: documentos, alertas o grupos armados por territorio.",
+          "input_parameters": {
+            "view": "string",
+            "level": "string",
+            "phenomenon": "integer",
+            "date_from": "string",
+            "date_to": "string"
+          }
+        },
+        {
+          "name": "get_timeline",
+          "descripcion": "Linea de tiempo: documentos por ano, apilados por fenomeno o fuente.",
+          "input_parameters": {
+            "phenomenon": "integer",
+            "entity": "string"
+          }
+        },
+        {
+          "name": "get_entity_matrix",
+          "descripcion": "Matriz de calor: entidades contra fuente, idioma, formato o fenomeno.",
+          "input_parameters": {
+            "cols": "string",
+            "phenomenon": "integer",
+            "date_from": "string",
+            "date_to": "string"
+          }
+        },
+        {
+          "name": "get_cooccurrence",
+          "descripcion": "Red de co-ocurrencia: entidades que aparecen juntas en los documentos.",
+          "input_parameters": {
+            "phenomenon": "integer",
+            "entity": "string",
+            "date_from": "string",
+            "date_to": "string"
+          }
+        },
+        {
+          "name": "get_quadrant",
+          "descripcion": "Cuadrante de intensidad contra tendencia por entidad.",
+          "input_parameters": {
+            "phenomenon": "integer"
+          }
+        },
+        {
+          "name": "get_metadata_breakdown",
+          "descripcion": "Barras: documentos por fuente, idioma, formato o fenomeno.",
+          "input_parameters": {
+            "by": "string",
+            "phenomenon": "integer",
+            "date_from": "string",
+            "date_to": "string"
+          }
+        },
+        {
+          "name": "get_distribution",
+          "descripcion": "Histograma: fragmentos o entidades por documento.",
+          "input_parameters": {
+            "measure": "string",
+            "phenomenon": "integer",
+            "date_from": "string",
+            "date_to": "string"
+          }
+        }
+      ]
     }
   ]
 }

@@ -177,5 +177,58 @@ OUTPUT_GUARDRAIL = Agent(
     ),
 )
 
-SUBAGENTS = (INPUT_GUARDRAIL, RAG_ANALYST, VERIFIER, OUTPUT_GUARDRAIL)
-ALL_AGENTS = (INPUT_GUARDRAIL, ORCHESTRATOR, RAG_ANALYST, VERIFIER, OUTPUT_GUARDRAIL)
+VISUALIZER = Agent(
+    id="visualizer",
+    nombre="Generador de visualizaciones",
+    descripcion=(
+        "Decide, a partir de la pregunta, que componentes del tablero la responden y con que "
+        "filtros: fenomeno, nivel territorial, capa del mapa, entidad y periodo. No elige los "
+        "datos, que resuelven los endpoints de agregacion con su traza a doc_id y chunk_id. Corre "
+        "en paralelo al analista en POST /chat/stream, que es lo que usa el tablero."
+    ),
+    tier="fast",
+    ejemplos_de_activacion=(
+        "Que departamentos concentran las alertas tempranas en los ultimos 12 meses?",
+        "Que actores aparecen junto al Clan del Golfo?",
+    ),
+    tools=(
+        Tool(
+            name="get_places",
+            descripcion="Mapa coropletico: documentos, alertas o grupos armados por territorio.",
+            input_parameters={"view": "string", "level": "string", "phenomenon": "integer", "date_from": "string", "date_to": "string"},
+        ),
+        Tool(
+            name="get_timeline",
+            descripcion="Linea de tiempo: documentos por ano, apilados por fenomeno o fuente.",
+            input_parameters={"phenomenon": "integer", "entity": "string"},
+        ),
+        Tool(
+            name="get_entity_matrix",
+            descripcion="Matriz de calor: entidades contra fuente, idioma, formato o fenomeno.",
+            input_parameters={"cols": "string", "phenomenon": "integer", "date_from": "string", "date_to": "string"},
+        ),
+        Tool(
+            name="get_cooccurrence",
+            descripcion="Red de co-ocurrencia: entidades que aparecen juntas en los documentos.",
+            input_parameters={"phenomenon": "integer", "entity": "string", "date_from": "string", "date_to": "string"},
+        ),
+        Tool(
+            name="get_quadrant",
+            descripcion="Cuadrante de intensidad contra tendencia por entidad.",
+            input_parameters={"phenomenon": "integer"},
+        ),
+        Tool(
+            name="get_metadata_breakdown",
+            descripcion="Barras: documentos por fuente, idioma, formato o fenomeno.",
+            input_parameters={"by": "string", "phenomenon": "integer", "date_from": "string", "date_to": "string"},
+        ),
+        Tool(
+            name="get_distribution",
+            descripcion="Histograma: fragmentos o entidades por documento.",
+            input_parameters={"measure": "string", "phenomenon": "integer", "date_from": "string", "date_to": "string"},
+        ),
+    ),
+)
+
+SUBAGENTS = (INPUT_GUARDRAIL, RAG_ANALYST, VERIFIER, OUTPUT_GUARDRAIL, VISUALIZER)
+ALL_AGENTS = (INPUT_GUARDRAIL, ORCHESTRATOR, RAG_ANALYST, VERIFIER, OUTPUT_GUARDRAIL, VISUALIZER)
