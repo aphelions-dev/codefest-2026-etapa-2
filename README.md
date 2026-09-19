@@ -25,30 +25,42 @@ docs/        documento de arquitectura y la especificación del reto
 
 ### El tablero (`dashboard.`)
 
-El mapa es el lienzo y todo lo demás se apoya en sus bordes.
+El mapa es el lienzo; la barra izquierda, la franja inferior y el analista se apoyan en sus bordes.
 
-- **Filtrar por fenómeno**: los tres botones de la barra izquierda. El filtro se propaga a todas
-  las vistas y queda en la URL, así que el enlace se puede compartir con el filtro puesto.
-- **Pedirle algo al agente**: se escribe en el analista, a la derecha. Lo que el agente active
-  reemplaza los componentes del panel de análisis — el tablero no muestra todo a la vez.
-- **Filtrar por entidad** (*brushing*): un clic en el nombre de una fila de la matriz, en un nodo de
-  la red o en un punto del cuadrante reduce el resto de vistas a los documentos que la nombran. El
-  filtro activo aparece arriba y se quita con un clic o con `Esc`.
-- **Verificar cualquier dato**: un clic en una celda, una arista o un territorio abre el documento
-  original en el fragmento exacto que lo sustenta. En el cuadrante, doble clic.
-- **Cambiar lo que mide el mapa**: *Documentos*, *Alertas* o *Grupos armados*, en la barra
-  izquierda bajo el filtro de fenómeno. Cada vista tiene su filtro propio —clase de riesgo, grupo
-  armado— y su ficha con la fuente y sus límites. En *Documentos*, además, se alterna entre países
-  y departamentos.
-
-  Las alertas y la presencia armada solo existen en el fenómeno 3, así que elegirlas fija ese
-  filtro, y cambiar a otro fenómeno devuelve el mapa a *Documentos*: el tablero nunca enseña cifras
-  de un fenómeno bajo la etiqueta de otro.
+- **Filtrar por fenómeno**: los mosaicos *Todos · IA · Espacio · Territorio* de la barra
+  izquierda. El filtro se propaga a todas las vistas y queda en la URL (`?fenomeno=`).
+- **Filtrar por periodo**: en la franja de la línea de tiempo, con los atajos *12 m · 24 m ·
+  5 años*, con el deslizador por meses o con un clic en la barra de un año. Queda en la URL
+  (`?desde=AAAA-MM&hasta=AAAA-MM`) y recorta el mapa, el detalle y los componentes. Un documento
+  entra cuando toda su fecha conocida cae en el periodo: los fechados solo por año entran si el
+  periodo cubre su año entero. El ⓘ de la franja lo explica.
+- **Cambiar lo que mide el mapa**: *Documentos*, *Alertas* o *Grupos*, con el alcance de cada capa
+  debajo. En *Documentos* se alterna entre países y departamentos, y el nivel **también sigue al
+  zoom**: acercarse a Colombia muestra sus departamentos. En *Alertas* se elige la clase de
+  riesgo; en *Grupos*, un grupo armado de la lista con barras. Alertas y grupos solo existen en el
+  fenómeno 3, así que elegirlas fija ese filtro.
+- **Explorar un territorio**: pasar el cursor enseña su ficha (cifra, puesto con empates,
+  desglose); el clic lo fija, lo encuadra y abre en la barra la evidencia con cada mención
+  **resaltada** tal como se contó.
+- **Componentes de análisis**: la píldora *Análisis* sobre el mapa lista los activos (matriz de
+  calor, cuadrante, red, histograma); cada uno se abre en un diálogo grande que deja el analista a
+  la vista. Lo que el agente active reemplaza esa lista: el tablero no muestra todo a la vez.
+- **Filtrar por entidad** (*brushing*): un clic en una fila de la matriz, en un nodo de la red o en
+  un punto del cuadrante reduce las demás vistas a los documentos que la nombran. El filtro se
+  quita desde el chip del diálogo.
+- **Verificar cualquier dato**: toda cifra lleva a su `doc_id` y `chunk_id`. Una celda, una arista,
+  una barra o un territorio abren el documento en el fragmento exacto; los nodos de la red y los
+  puntos del cuadrante, con doble clic.
+- **Preguntar**: en el analista, a la derecha. Cada respuesta enseña sus citas enlazadas, las
+  fuentes que leyó (las citadas aparte) y el **razonamiento**: los cinco agentes en orden, con su
+  modelo, sus tokens y cada herramienta con lo que devolvió.
+- **Ir al chat a solas**: el botón *Chat* de la cabecera abre `frontagent.`.
 
 ### El chat de pruebas (`frontagent.`)
 
 La misma imagen del frontend con `NEXT_PUBLIC_SURFACE=chat`: solo el asistente, para interactuar
-con el agente a mano durante la evaluación.
+con el agente a mano durante la evaluación. Tiene lo mismo que el analista del tablero —citas que
+abren el documento, fuentes y razonamiento— y un botón *Tablero* para volver al radar.
 
 ### El endpoint del agente (`agent.`)
 
@@ -112,6 +124,16 @@ uv run --env-file ../.env python -m precompute.amazon_regions   # geometría de 
 # descargados como adm2_<ISO3>.json en una carpeta cualquiera.
 uv run --env-file ../.env python -m precompute.municipalities --data <carpeta>
 ```
+
+En producción, la imagen del backend lleva `precompute/` dentro, así que cualquiera de ellos se
+puede volver a correr desde la terminal del contenedor en Coolify, contra la misma base:
+
+```bash
+python -m precompute.places    # p. ej., tras corregir el diccionario de lugares
+```
+
+El esquema se aplica al arrancar la API (es idempotente), así que una columna nueva existe aunque
+el precompute todavía no haya corrido.
 
 Cada uno es idempotente y dice por consola qué produjo. `document_dates` informa además de cuántos
 documentos quedaron fechados y con qué regla, que es lo que declara la línea de tiempo.
@@ -208,6 +230,10 @@ build args: un build arg queda dentro de la imagen. El endpoint que declara
 
 Ambos Dockerfiles construyen imágenes autosuficientes, corren sin root y traen `HEALTHCHECK`.
 
+Los tres recursos se redespliegan solos con cada push a `main` (webhook de GitHub). Durante la
+ventana de evaluación del Reto 1 eso incluye `agent.` y `frontagent.`: no se hace push a `main`
+entre las 8:00 y las 12:30 sin haberlo decidido.
+
 ### Variables de entorno
 
 | Variable | Obligatoria | Qué es |
@@ -228,5 +254,7 @@ en tiempo de ejecución a propósito: si faltaran, es mejor que falle al arranca
 
 ## Licencia
 
-Apache 2.0. El mapa usa teselas de OpenFreeMap (© OpenMapTiles, © OpenStreetMap), con uso comercial
-permitido y atribución obligatoria. Las geometrías son de Natural Earth (dominio público).
+Apache 2.0. Los datos y el código de terceros, con su licencia y su atribución, están en
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md): teselas de OpenFreeMap (© OpenMapTiles,
+© OpenStreetMap), fronteras de Natural Earth (dominio público), municipios de geoBoundaries y
+presencia armada de Amazon Underworld (ambos CC BY 4.0).

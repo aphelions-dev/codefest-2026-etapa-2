@@ -256,7 +256,10 @@ concentración («¿qué departamentos concentran las menciones?») y de actores
 juntos?»), así que el mapa se acompaña de la red y del panel de evidencia.
 
 **Los tres comparten** el panel de evidencia y la trazabilidad, porque en los tres el valor del
-análisis depende de poder verificar la afirmación en el texto original.
+análisis depende de poder verificar la afirmación en el texto original. Comparten también el
+**histograma** (tarea de distribución, B.2.1): fragmentos o entidades por documento, en tramos que
+doblan y apilados por fenómeno. Es lo que deja ver que los tres corpus no son comparables en bruto:
+la mitad de F3 son alertas de un fragmento, y los informes de F1 tienen cientos.
 
 ### 3.2.1 Las tres vistas del mapa
 
@@ -334,16 +337,25 @@ componente lo declara en su propia cabecera en vez de repartirlos y falsear la t
 
 ### 3.5 Trazabilidad, de extremo a extremo
 
-Todo dato del tablero lleva a su fragmento:
+**Toda cifra del tablero lleva a un fragmento** (§3.3.3 y B.1.3). Cada respuesta de agregación trae
+con cada barra, celda, año, nodo o territorio una `trace` con el `doc_id` y el `chunk_id` de un
+fragmento que esa cifra cuenta, leída del índice:
 
 | Vista | Gesto | Lleva a |
 |---|---|---|
+| Mapa | clic en un territorio | el fragmento que más lo menciona; el detalle lista todos |
+| Detalle del territorio | clic en un fragmento | ese fragmento, con cada mención **resaltada tal como se contó** |
 | Matriz de calor | clic en una celda | el fragmento más denso de esa entidad en esa fuente |
-| Red de entidades | clic en una arista | el fragmento donde coinciden las dos entidades |
+| Red de entidades | clic en una arista / doble clic en un nodo | donde coinciden las dos / el que más nombra la entidad |
 | Cuadrante | doble clic en un punto | el fragmento más denso de esa entidad |
-| Mapa | clic en un territorio | el fragmento que nombra ese territorio |
-| Panel de evidencia | clic en el identificador | el documento, abierto en ese fragmento |
-| Respuesta del chat | la cita `[F2-SWF-099]` | el documento citado |
+| Barras e histograma | clic en una barra | un documento que la barra cuenta |
+| Línea de tiempo | clic en un año | un documento de ese año, junto a la leyenda |
+| Filtro de grupos armados | icono de la fila | el registro de un municipio con ese grupo |
+| Respuesta del chat | la cita, entre `[]`, `【】` o `()` | el documento citado, en el fragmento recuperado |
+
+El resaltado usa las **mismas formas** con que el precómputo contó la mención («United States»,
+«EE. UU.»), que la API devuelve con el territorio, y distingue mayúsculas como él: se marca justo lo
+que se contó, no algo parecido.
 
 La vista del documento **sirve ventanas de 80 fragmentos centradas en la cita**, no el documento
 entero: el mayor tiene 1.960 fragmentos, y servirlo completo son megabytes de JSON y otros tantos
@@ -352,39 +364,79 @@ ambas direcciones.
 
 ### 3.6 Ejecución dinámica y coordinación entre vistas
 
-El tablero **no muestra todos los componentes a la vez**. Arranca con una vista por capacidad y, en
-cuanto el agente responde, lo que activó **reemplaza** la vista.
+El tablero **no muestra todos los componentes a la vez**. Arranca con el mapa y la línea de tiempo
+—lo espacial y lo temporal, siempre presentes— y una píldora con los componentes disponibles; en
+cuanto el agente responde, lo que activó **reemplaza** esa lista y se abre.
 
-Dos filtros globales se propagan a todas las vistas y viven en la URL, de modo que un evaluador
+Tres filtros globales se propagan a todas las vistas y viven en la URL, de modo que un evaluador
 puede compartir exactamente lo que está mirando y el botón de atrás funciona:
 
 - **Fenómeno** (`?fenomeno=`), que limita todos los componentes.
-- **Entidad** (`?entidad=`), que es el *brushing and linking* de B.6.3: seleccionar una entidad en
-  la matriz, la red o el cuadrante reduce el mapa y la línea de tiempo a los documentos que la
-  nombran, y atenúa lo no seleccionado en las demás vistas. El filtro activo se muestra siempre y se
-  quita con un clic o con Esc.
+- **Periodo** (`?desde=AAAA-MM&hasta=AAAA-MM`), el filtro por rango de fechas que pide B.6.3. Se
+  elige en la franja temporal —atajos de 12, 24 y 60 meses, un deslizador por meses o un clic en el
+  año— y recorta el mapa, el detalle, la matriz, la red, las barras y el histograma. El cuadrante
+  queda fuera a propósito: su eje vertical ya compara lo reciente con lo anterior.
+
+  La granularidad es el mes, pero solo 212 documentos traen fecha al día; 753 solo el año. Un
+  documento entra cuando **toda su fecha conocida cae en el periodo**: el fechado por año entra si
+  el periodo cubre ese año entero. Así el filtro nunca sitúa un documento en un mes que no consta.
+  Las alertas usan su día de emisión, de su ficha estructurada, en las dos capas por igual.
+- **Entidad** (`?entidad=`), el *brushing and linking* de B.6.3: seleccionar una entidad en la
+  matriz, la red o el cuadrante reduce el mapa, el detalle del territorio y la línea de tiempo a los
+  documentos que la nombran, y atenúa lo no seleccionado en las demás vistas.
+
+Cada vista declara lo que un filtro **no** alcanza en vez de ignorarlo: la presencia armada no está
+fechada ni sale del corpus, y su ficha lo dice.
 
 ### 3.7 Disposición: el mapa como lienzo
 
 El tablero usa un **maestro-detalle** (B.6.1): el mapa ocupa la pantalla y los paneles se anclan a
-sus bordes en lugar de flotar encima. La barra lateral lleva el filtro global y el ranking
-territorial; el panel de análisis, los componentes anchos; la franja inferior, la línea de tiempo,
-que necesita anchura y no cabe en una columna; y la derecha, el asistente.
+sus bordes. La barra izquierda lleva el fenómeno, la capa del mapa con su alcance y el ranking —que
+al elegir un territorio se sustituye por su evidencia—; la franja inferior, la línea de tiempo y el
+periodo; la derecha, el asistente.
 
-El panel de análisis se limita a **dos columnas**: una matriz de calor o un cuadrante en un tercio de
-pantalla amontonan sus etiquetas y dejan de resolver la tarea que justifica su existencia.
+Los componentes de análisis **no se encajan en el hueco del mapa**: una matriz de calor o un
+cuadrante en un tercio de pantalla amontonan sus etiquetas y dejan de resolver su tarea. Se abren
+en un **diálogo grande, no modal**, que cubre todo menos el asistente: la pregunta y lo que activó
+se leen juntos, y cerrarlo devuelve el mapa intacto.
+
+El nivel de agregación **sigue al zoom** (B.4.2): acercarse a Colombia pasa la capa de documentos a
+departamentos y alejarse la devuelve a países, con dos umbrales distintos para que un zoom en el
+borde no alterne en cada movimiento.
 
 ### 3.8 Codificación visual
 
 - **Paleta consistente** entre vistas: el mismo fenómeno es siempre el mismo color (`--f1`, `--f2`,
-  `--f3`), y la rampa secuencial de cuatro pasos del mapa se reutiliza en la leyenda y el ranking.
-- **Cortes por cuantiles** (p50, p75, p90, p97) en el coroplético, no escala continua: con escala
-  continua Estados Unidos aplana al resto y casi todo sale coloreado. Con cuantiles, la mitad menos
-  citada queda sin color y resalta lo que concentra.
+  `--f3`), en el mapa, la línea de tiempo, el histograma y las leyendas. Los tipos de entidad de la
+  red tienen **su propia paleta**: con los colores de fenómeno, un «programa» en ámbar se leía como
+  F3.
+- **Cortes por cuantiles** en el coroplético (desde el mínimo, p50, p80, p95), no escala continua:
+  con escala continua Estados Unidos aplana al resto. **Todo territorio con al menos un documento
+  lleva color**; sin relleno queda solo lo que ningún documento nombra, porque dejar en blanco la
+  mitad menos citada afirmaba una ausencia que no existía.
+- **Puestos con empates**: los territorios con la misma cifra comparten puesto («169.º de 639 ·
+  empate con 470»). Numerarlos seguidos hacía depender el puesto del orden del desempate.
 - **Nunca solo color**: cada territorio lleva su cifra en el ranking, cada celda de la matriz su
-  `title` con los conteos, y cada punto del cuadrante su tooltip con las dos cifras por separado.
+  número y su escala, y cada punto del cuadrante su tooltip con las dos cifras por separado.
 - **Título, unidad y fuente obligatorios** en todo componente: el anexo pide que nadie tenga que
   inferir qué representa un eje o un color.
+
+### 3.9 Calidad del dato: la auditoría de los lugares
+
+El conteo de territorios se auditó contra el texto antes de la entrega, y se corrigió lo que
+contaba algo que no era el territorio:
+
+- **Natural Earth da a Bogotá el código de Cundinamarca** (`CO-CUN`). Cada mención de la capital
+  contaba para el departamento, que salía primero, y una geometría pisaba a la otra. Bogotá tiene
+  ahora su código propio, `CO-DC`.
+- **Homónimos**: un grupo armado («Libertadores del Vichada»), un municipio de otro departamento
+  («Puerto Santander»), regiones que cruzan varios («Magdalena Medio», «Bajo Cauca»), los estados
+  de Amazonas de Brasil y Venezuela, un tratado («Pacto de Bogotá») y una universidad («Georgia
+  Institute of Technology»). Entran como señuelos, el mecanismo que ya existía para «New Mexico».
+  Santander pasó de 59 a 41 documentos; Vichada, de 35 a 24.
+- **Direcciones postales**: cada alerta lleva la de la Defensoría y la de la CIPRAT en Bogotá. El
+  filtro de plantillas no las atrapaba porque el OCR las escribe distinto en cada documento; se
+  quitan antes de buscar.
 
 ---
 
@@ -392,7 +444,6 @@ pantalla amontonan sus etiquetas y dejan de resolver la tarea que justifica su e
 
 | No está | Motivo |
 |---|---|
-| Polígonos municipales | La Etapa 1 indexó las teselas de Amazon Underworld como texto, y en esa conversión se perdió la geometría. Los atributos sí sobrevivieron, así que el dato está: lo que falta es la forma con que dibujarlo. El mapa agrega al departamento y la lista conserva el municipio |
 | Grafo formal de tripletas | La Etapa 1 no construyó el grafo opcional. B.3.1 declara la red de co-ocurrencia alternativa legítima, y es la que no inventa relaciones semánticas que nadie extrajo |
 | Extracción de entidades con LLM | 1.813 documentos por inferencia se comen el presupuesto. Se extraen por diccionario y coincidencia de texto, que para nombres propios no necesita razonamiento |
 | Reranker sobre la recuperación | Medido contra el ground truth de la Etapa 1, empeoraba el resultado |
