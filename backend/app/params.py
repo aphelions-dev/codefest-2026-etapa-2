@@ -31,3 +31,10 @@ class MatrixColumn(str, Enum):
     phenomenon = "phenomenon"
     language = "language"
     format = "format"
+
+
+class PlaceLevel(str, Enum):
+    """Nivel territorial del mapa. El zoom del anexo pide cambiar de agregacion, no de fuente."""
+
+    country = "country"
+    department = "department"

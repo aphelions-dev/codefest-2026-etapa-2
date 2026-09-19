@@ -1,3 +1,5 @@
+import json
+
 """Modelos de respuesta. Son la unica fuente del contrato: los tipos del frontend se generan de
 aqui por OpenAPI, asi que nada se escribe a mano dos veces."""
 
@@ -91,3 +93,44 @@ class Graph(BaseModel):
     min_documents: int
     nodes: list[GraphNode]
     edges: list[GraphEdge]
+
+
+class PlaceProperties(BaseModel):
+    place_id: str
+    name: str
+    documents: int
+    mentions: int
+    trace: Trace
+
+
+class PlaceFeature(BaseModel):
+    """Un lugar como Feature de GeoJSON: el mapa lo consume tal cual."""
+
+    type: str = "Feature"
+    id: str
+    geometry: dict
+    properties: PlaceProperties
+
+
+class Places(BaseModel):
+    """FeatureCollection de GeoJSON con el conteo en las propiedades."""
+
+    type: str = "FeatureCollection"
+    level: str
+    phenomenon: int | None = None
+    features: list[PlaceFeature]
+
+
+class TimelinePoint(BaseModel):
+    year: int
+    documents: int
+
+
+class Timeline(BaseModel):
+    """Evolucion temporal. `dated` y `total` dicen sobre cuantos documentos se puede afirmar algo."""
+
+    phenomenon: int | None = None
+    entity: str | None = None
+    dated_documents: int
+    total_documents: int
+    points: list[TimelinePoint]

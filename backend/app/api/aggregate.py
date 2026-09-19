@@ -4,13 +4,17 @@ No exponen el indice crudo. Cada respuesta llega lista para pintar, con los iden
 permiten volver al fragmento de origen.
 """
 
+import json
+
 from fastapi import APIRouter, HTTPException, Query
 
 from app.db import breakdown as breakdown_db
 from app.db import entities as entities_db
+from app.db import places as places_db
+from app.db import timeline as timeline_db
 from app.db import documents as documents_db
 from app.db.pool import Pool
-from app.params import BreakdownField, MatrixColumn, Phenomenon
+from app.params import BreakdownField, MatrixColumn, Phenomenon, PlaceLevel
 from app.responses import (
     Breakdown,
     BreakdownBucket,
@@ -21,6 +25,11 @@ from app.responses import (
     GraphNode,
     Matrix,
     MatrixCell,
+    PlaceFeature,
+    PlaceProperties,
+    Places,
+    Timeline,
+    TimelinePoint,
     Trace,
 )
 
@@ -137,4 +146,54 @@ async def entity_cooccurrence(
             )
             for edge in edges
         ],
+    )
+
+
+@router.get("/places", summary="Lugares nombrados en el corpus")
+async def places(
+    pool: Pool,
+    level: PlaceLevel = Query(default=PlaceLevel.country, description="Nivel territorial"),
+    phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+    limit: int = Query(default=80, ge=1, le=250, description="Cuantos lugares devolver"),
+) -> Places:
+    """Alimenta el mapa coropletico. Solo devuelve lugares que el corpus nombra."""
+    value = phenomenon.value if phenomenon else None
+    rows = await places_db.by_level(pool, level.value, value, limit)
+    return Places(
+        level=level.value,
+        phenomenon=value,
+        features=[
+            PlaceFeature(
+                id=row["place_id"],
+                geometry=json.loads(row["geometry"]),
+                properties=PlaceProperties(
+                    place_id=row["place_id"],
+                    name=row["name"],
+                    documents=row["documents"],
+                    mentions=row["mentions"],
+                    trace=Trace(doc_id=row["sample_doc"], chunk_id=row["sample_chunk"]),
+                ),
+            )
+            for row in rows
+        ],
+    )
+
+
+@router.get("/timeline", summary="Documentos por ano")
+async def timeline(
+    pool: Pool,
+    phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+    entity: str | None = Query(default=None, description="Solo documentos que nombran la entidad"),
+) -> Timeline:
+    """Alimenta la linea de tiempo. Sin fechas precomputadas la serie sale vacia a proposito:
+    inventar una fecha desde el texto seria presentar una variable sin sustento."""
+    value = phenomenon.value if phenomenon else None
+    dated, total = await timeline_db.coverage(pool, value)
+    rows = await timeline_db.by_period(pool, value, entity)
+    return Timeline(
+        phenomenon=value,
+        entity=entity,
+        dated_documents=dated,
+        total_documents=total,
+        points=[TimelinePoint(year=row["year"], documents=row["documents"]) for row in rows],
     )
