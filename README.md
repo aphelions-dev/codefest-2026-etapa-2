@@ -230,9 +230,10 @@ build args: un build arg queda dentro de la imagen. El endpoint que declara
 
 Ambos Dockerfiles construyen imágenes autosuficientes, corren sin root y traen `HEALTHCHECK`.
 
-Los tres recursos se redespliegan solos con cada push a `main` (webhook de GitHub). Durante la
-ventana de evaluación del Reto 1 eso incluye `agent.` y `frontagent.`: no se hace push a `main`
-entre las 8:00 y las 12:30 sin haberlo decidido.
+`agent.` y `dashboard.` se redespliegan solos con cada push a `main` que toque su carpeta (webhook
+de GitHub); `frontagent.` se despliega a mano, para que un cambio del tablero no pueda tumbar el
+chat durante la ventana del Reto 1. En esa ventana, un push que toque `backend/` redespliega el
+agente evaluado: no se hace entre las 8:00 y las 12:30 sin haberlo decidido.
 
 ### Variables de entorno
 
