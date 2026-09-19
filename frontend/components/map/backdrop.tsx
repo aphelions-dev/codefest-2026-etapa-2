@@ -54,6 +54,8 @@ export function MapBackdrop({
   leftInset,
   rightInset,
   bottomInset,
+  periodNote,
+  loading,
 }: {
   readonly data: readonly MapDatum[];
   readonly guide: MapGuide;
@@ -69,6 +71,9 @@ export function MapBackdrop({
   readonly leftInset: number;
   readonly rightInset: number;
   readonly bottomInset: number;
+  readonly periodNote: string | null;
+  /** Si la vista está pidiendo sus datos: sin datos aún, barrido; con datos, una barra fina. */
+  readonly loading: boolean;
 }) {
   const [hovered, setHovered] = useState<Hovered | null>(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -101,6 +106,7 @@ export function MapBackdrop({
         center={camera.center}
         className="h-full w-full"
         key={`${view}-${level}`}
+        loading={loading && data.length === 0}
         theme="dark"
         zoom={camera.zoom}
       >
@@ -155,6 +161,14 @@ export function MapBackdrop({
         className="pointer-events-none absolute top-0 z-10 *:pointer-events-auto"
         style={{ left: leftInset, right: rightInset, bottom: bottomInset }}
       >
+        {/* Recalculando con datos ya pintados: una barra que avisa sin tapar el mapa. */}
+        {loading && data.length > 0 ? (
+          <div className="bg-primary/15 absolute inset-x-0 top-0 h-0.5 overflow-hidden" role="status">
+            <div className="bg-primary animate-[radar-progress_1.1s_ease-in-out_infinite] h-full w-1/3" />
+            <span className="sr-only">Actualizando el mapa</span>
+          </div>
+        ) : null}
+
         {hovered ? (
           <HoverCard
             place={hovered.place}
@@ -167,7 +181,7 @@ export function MapBackdrop({
 
         {/* La ficha se ancla al borde del hueco, no al del lienzo: al plegar la barra se
             desplaza con él en vez de quedarse debajo del panel. */}
-        <div className="absolute top-3 left-3 w-80 max-w-[calc(100%-1.5rem)] space-y-2">
+        <div className="absolute top-3 left-3 w-72 max-w-[calc(100%-1.5rem)] space-y-2">
           <PlaceCard
             collapsed={collapsed}
             color={ramp[2]}
@@ -175,6 +189,7 @@ export function MapBackdrop({
             legend={steps.length > 0 ? <GradientLegend breaks={steps} ramp={[...ramp]} /> : null}
             onClose={() => onSelect(null)}
             onToggle={() => setCollapsed((open) => !open)}
+            periodNote={periodNote}
             place={selected?.place ?? null}
             rank={rankOf(selected?.place ?? null)}
             total={data.length}

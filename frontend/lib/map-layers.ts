@@ -70,6 +70,13 @@ export const VIEW_LABEL: Record<MapView, string> = {
   grupos: "Grupos armados",
 };
 
+/** Qué mide cada capa y dónde: el selector lo dice para que nadie tenga que adivinarlo. */
+export const VIEW_SCOPE: Record<MapView, string> = {
+  documentos: "Territorios que nombra el corpus",
+  alertas: "Defensoría del Pueblo · Colombia",
+  grupos: "Amazon Underworld · cuenca amazónica",
+};
+
 /** La vista del mapa vive en la URL, como los demás filtros. */
 export function useMapView() {
   const [view, setView] = useQueryState("vista", parseAsStringLiteral(VIEWS));

@@ -12,6 +12,7 @@ export const PHENOMENA = [
 /** Clases del distintivo y del punto, por fenómeno, para que un mismo fenómeno sea el mismo color. */
 export const PHENOMENON_STYLE = ["", "border-f1/50 text-f1", "border-f2/50 text-f2", "border-f3/50 text-f3"];
 export const PHENOMENON_DOT = ["", "bg-f1", "bg-f2", "bg-f3"];
+export const PHENOMENON_TEXT = ["", "text-f1", "text-f2", "text-f3"];
 
 /** El color como valor, para lo que se pinta con CSS en vez de con clases (Recharts, SVG). */
 export function phenomenonColor(id: number | null | undefined): string {

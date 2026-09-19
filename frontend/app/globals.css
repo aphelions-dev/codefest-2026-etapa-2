@@ -36,6 +36,16 @@
   --radius-2xl: calc(var(--radius) * 1.8);
 }
 
+/* La barra de progreso del mapa: un tramo que cruza de lado a lado mientras llegan los datos. */
+@keyframes radar-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
 /* Tema único: gris oscuro #121212 con acento cian. */
 .dark {
   --background: #121212;

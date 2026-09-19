@@ -215,12 +215,21 @@ type MapProps = {
 } & Omit<MapLibreGL.MapOptions, "container" | "style">;
 
 function DefaultLoader() {
+  // Un barrido de radar mientras llegan las teselas o los datos: el lienzo nunca se ve vacío.
   return (
-    <div className="bg-background/50 absolute inset-0 z-10 flex items-center justify-center backdrop-blur-xs">
-      <div className="flex gap-1">
-        <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
-        <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full [animation-delay:150ms]" />
-        <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full [animation-delay:300ms]" />
+    <div
+      role="status"
+      aria-live="polite"
+      className="absolute inset-0 z-10 grid place-items-center bg-background/70 backdrop-blur-sm animate-in fade-in-0 duration-300"
+    >
+      <div className="flex flex-col items-center gap-3">
+        <div className="relative size-20 rounded-full border border-primary/25">
+          <div className="absolute inset-3 rounded-full border border-primary/15" />
+          <div className="absolute inset-6 rounded-full border border-primary/10" />
+          <div className="absolute inset-0 animate-spin rounded-full bg-[conic-gradient(from_0deg,transparent_0deg,transparent_270deg,rgb(34_211_238/0.45)_360deg)] [animation-duration:1.6s]" />
+          <div className="absolute top-1/2 left-1/2 size-1.5 -translate-1/2 rounded-full bg-primary" />
+        </div>
+        <span className="text-[11px] text-muted-foreground">Cargando el radar…</span>
       </div>
     </div>
   );
@@ -407,7 +416,7 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     <MapContext.Provider value={contextValue}>
       <div
         ref={containerRef}
-        className={cn("relative h-full w-full", className)}
+        className={cn("relative h-full w-full bg-background", className)}
       >
         {(!isLoaded || loading) && <DefaultLoader />}
         {/* SSR-safe: children render only when map is loaded on client */}

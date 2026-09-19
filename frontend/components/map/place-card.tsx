@@ -1,12 +1,13 @@
 "use client";
 
-import { ChevronDownIcon, ChevronUpIcon, XIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronUpIcon, InfoIcon, XIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Flag } from "@/components/flag";
 import { DocumentLink } from "@/components/document-view";
 import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { rankLabel } from "@/lib/format";
 import type { MapDatum, MapGuide } from "@/lib/map-layers";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ export function PlaceCard({
   collapsed,
   onToggle,
   onClose,
+  periodNote,
 }: {
   readonly guide: MapGuide;
   readonly color: string;
@@ -36,6 +38,8 @@ export function PlaceCard({
   readonly collapsed: boolean;
   readonly onToggle: () => void;
   readonly onClose: () => void;
+  /** El periodo que recorta la vista, o por qué no la recorta. */
+  readonly periodNote: string | null;
 }) {
   const dot = <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />;
   const close = place ? (
@@ -62,28 +66,31 @@ export function PlaceCard({
   return (
     <section
       aria-label="Foco del mapa"
-      className={cn(GLASS, "border-border/60 w-full space-y-2.5 rounded-xl border p-3 shadow-lg")}
+      className={cn(GLASS, "border-border/60 w-full space-y-2 rounded-xl border p-2.5 shadow-xl shadow-black/40")}
     >
-      <header className="flex items-start gap-2">
-        <span className="mt-1.5">{dot}</span>
-        <div className="min-w-0 flex-1">
-          {place ? (
-            <>
-              <div className="text-muted-foreground truncate text-[11px]">{guide.title}</div>
-              <div className="flex items-center gap-2">
-                <Flag code={place.iso2} />
-                <h2 className="truncate font-semibold">{place.name}</h2>
-                {rank !== null ? (
-                  <span className="text-muted-foreground shrink-0 font-mono text-[10px]">
-                    {rankLabel(rank, total)}
-                  </span>
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <h2 className="text-sm font-semibold">{guide.title}</h2>
-          )}
-        </div>
+      <header className="flex items-center gap-1.5">
+        {dot}
+        {place ? <Flag code={place.iso2} /> : null}
+        <h2 className="min-w-0 flex-1 truncate text-[13px] font-semibold">{place?.name ?? guide.title}</h2>
+        {place && rank !== null ? (
+          <span className="text-muted-foreground shrink-0 font-mono text-[10px]">{rankLabel(rank, total)}</span>
+        ) : null}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              aria-label="Fuente y límites de la vista"
+              className="text-muted-foreground hover:text-foreground rounded p-0.5"
+              type="button"
+            >
+              <InfoIcon className="size-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs flex-col items-start text-left" side="bottom">
+            <span>{guide.read}</span>
+            <span className="text-muted-foreground">Fuente: {guide.source}</span>
+            <span className="text-muted-foreground">{guide.limits}</span>
+          </TooltipContent>
+        </Tooltip>
         <IconButton label="Plegar el foco" onClick={onToggle} size="icon-xs">
           <ChevronUpIcon />
         </IconButton>
@@ -91,13 +98,14 @@ export function PlaceCard({
       </header>
 
       {place ? (
-        <div className="space-y-0.5">
-          <div className="font-mono text-base font-semibold" style={{ color }}>
+        <div className="space-y-0.5 pl-3.5">
+          <div className="text-muted-foreground truncate text-[10px]">{guide.title}</div>
+          <div className="font-mono text-[15px] font-semibold" style={{ color }}>
             {place.headline}
           </div>
-          <div className="text-muted-foreground text-xs">{place.detail}</div>
+          <div className="text-muted-foreground text-[11px] leading-snug">{place.detail}</div>
           {/* La cifra del mapa lleva a un fragmento real: es lo que la hace verificable. */}
-          <div className="text-muted-foreground text-xs">
+          <div className="text-muted-foreground text-[11px]">
             Evidencia:{" "}
             <DocumentLink chunkId={place.trace.chunk_id} docId={place.trace.doc_id}>
               {place.trace.chunk_id}
@@ -105,18 +113,16 @@ export function PlaceCard({
           </div>
         </div>
       ) : (
-        <p className="text-muted-foreground text-xs leading-relaxed">{guide.measures}</p>
+        <p className="text-muted-foreground pl-3.5 text-[11px] leading-snug">{guide.measures}</p>
       )}
 
-      <div className="space-y-1">
-        {legend}
-        <p className="text-muted-foreground text-[11px] leading-snug">{guide.read}</p>
-      </div>
+      {legend}
 
-      <footer className="text-muted-foreground space-y-0.5 border-t pt-2 text-[10px] leading-snug">
-        <div>Fuente: {guide.source}</div>
-        {!place ? <div>{guide.limits}</div> : null}
-      </footer>
+      {periodNote ? (
+        <div className="text-muted-foreground border-border/60 border-t pt-1.5 text-[10px] tabular-nums">
+          Periodo: <span className="text-foreground/80">{periodNote}</span>
+        </div>
+      ) : null}
     </section>
   );
 }

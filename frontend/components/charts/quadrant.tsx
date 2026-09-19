@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Panel, PanelState } from "@/components/charts/panel";
 import type { Quadrant as QuadrantData } from "@/lib/api";
 import { formatNumber } from "@/lib/format";
+import { isActive, usePeriod } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
 import { useDocument } from "@/lib/use-document";
 
@@ -33,6 +34,8 @@ export function Quadrant({
     phenomenon: phenomenon ?? undefined,
   });
   const { open } = useDocument();
+  // El cuadrante ya parte el tiempo en dos mitades: recortarlo a un periodo le quitaría el eje.
+  const [period] = usePeriod();
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 520, height: 300 });
   const [hovered, setHovered] = useState<string | null>(null);
@@ -61,7 +64,9 @@ export function Quadrant({
     <Panel
       source={
         data && data.split_year
-          ? `${formatNumber(data.dated_documents)} de ${formatNumber(data.total_documents)} documentos tienen fecha en la metadata de su fuente. Un clic en una entidad filtra todo el tablero; dos, abren su fragmento.`
+          ? `${formatNumber(data.dated_documents)} de ${formatNumber(data.total_documents)} documentos tienen fecha en la metadata de su fuente.${
+              isActive(period) ? " El periodo no lo recorta: su eje vertical ya compara lo reciente con lo anterior." : ""
+            } Un clic en una entidad filtra todo el tablero; dos, abren su fragmento.`
           : undefined
       }
       title="Intensidad y tendencia por entidad"

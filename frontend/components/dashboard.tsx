@@ -12,7 +12,7 @@ import { SIDEBAR_OPEN, SIDEBAR_RAIL, Sidebar } from "@/components/sidebar";
 import { TimelineStrip } from "@/components/timeline-strip";
 import { AgentUnavailable, ask } from "@/lib/agent";
 import { useEntity, useMapLevel, usePhenomenon } from "@/lib/filters";
-import { usePeriod } from "@/lib/period";
+import { isActive, periodLabel, usePeriod } from "@/lib/period";
 import {
   type MapDatum,
   type MapView,
@@ -70,6 +70,12 @@ export function Dashboard() {
   // La vista decide qué mide el mapa; la entidad seleccionada en cualquier componente lo reduce a
   // los documentos que la nombran.
   const layer = useMapLayer(view, { phenomenon, level, entity, filter, period });
+  // Lo que la ficha del mapa dice del periodo: cuál recorta la vista, o que esta no tiene fecha.
+  const periodNote = !isActive(period)
+    ? null
+    : layer.periodApplies
+      ? periodLabel(period)
+      : `${periodLabel(period)} · no aplica, la fuente no fecha la presencia`;
   const breaks = quantileBreaks(layer.data.map((datum) => datum.value));
 
   useEffect(() => {
@@ -161,7 +167,9 @@ export function Dashboard() {
         guide={layer.guide}
         leftInset={sidebarWidth}
         level={level}
+        loading={layer.loading}
         onSelect={setSelected}
+        periodNote={periodNote}
         phenomenon={phenomenon}
         rankOf={rankOf}
         rightInset={chatWidth}

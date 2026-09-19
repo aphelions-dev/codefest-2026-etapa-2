@@ -14,6 +14,9 @@ function shade(value: number, max: number): string {
   return `color-mix(in oklab, var(--primary) ${Math.round(12 + t * 88)}%, var(--background))`;
 }
 
+// Por encima de esta intensidad la celda es clara y la cifra va en oscuro para leerse.
+const LIGHT = 0.55;
+
 /**
  * Matriz de calor: dos variables categóricas en los ejes y una numérica en el color. Responde
  * "qué entidad domina cada fuente": una fila con el color repartido es un concepto transversal,
@@ -46,12 +49,13 @@ export function Heatmap({
     <Panel
       source={data ? `${data.rows.length} entidades por ${data.cols.length} fuentes` : undefined}
       title="Entidades por fuente"
-      unit="Color: documentos que nombran la entidad en esa fuente. La celda abre el fragmento que la sustenta; el nombre de la fila filtra todo el tablero"
+      unit="Documentos que nombran la entidad en cada fuente. La celda abre el fragmento que la sustenta; el nombre de la fila filtra todo el tablero"
     >
       {!data || data.cells.length === 0 ? (
         <PanelState empty="Sin menciones para este filtro" error={error} loading={loading} />
       ) : (
-        <div className="h-full overflow-auto">
+        <div className="flex h-full flex-col gap-2">
+        <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full border-separate border-spacing-[2px] text-[11px]">
             <thead>
               <tr>
@@ -90,13 +94,17 @@ export function Heatmap({
                     return (
                       <td className="p-0" key={col}>
                         <button
-                          className="h-6 w-full rounded-[3px] align-middle disabled:cursor-default"
+                          className="hover:ring-foreground/60 h-7 w-full rounded-[3px] align-middle font-mono text-[10px] tabular-nums transition-shadow hover:ring-1 disabled:cursor-default disabled:hover:ring-0"
                           disabled={!cell}
                           onClick={() => cell && open(cell.trace.doc_id, cell.trace.chunk_id)}
-                          style={{ background: shade(documents, max) }}
+                          style={{
+                            background: shade(documents, max),
+                            color: Math.sqrt(documents / max) > LIGHT ? "var(--primary-foreground)" : "var(--muted-foreground)",
+                          }}
                           title={cell ? `${label} · abrir el documento` : label}
                           type="button"
                         >
+                          <span aria-hidden>{documents || ""}</span>
                           <span className="sr-only">{label}</span>
                         </button>
                       </td>
@@ -107,6 +115,17 @@ export function Heatmap({
               })}
             </tbody>
           </table>
+        </div>
+          {/* La escala: raíz cuadrada, así que el tono medio no es la mitad del máximo. */}
+          <div className="text-muted-foreground flex shrink-0 items-center gap-2 text-[10px]">
+            <span>1</span>
+            <div
+              className="h-1.5 w-32 rounded-full"
+              style={{ background: `linear-gradient(to right, ${shade(1, max)}, ${shade(max, max)})` }}
+            />
+            <span className="font-mono">{max}</span>
+            <span>documentos por celda</span>
+          </div>
         </div>
       )}
     </Panel>
