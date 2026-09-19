@@ -1,6 +1,10 @@
 """Lugares con su conteo y su geometria, para el mapa coropletico."""
 
+from datetime import date
+
 import asyncpg
+
+from app.db import period
 
 
 async def by_level(
@@ -9,11 +13,13 @@ async def by_level(
     phenomenon: int | None,
     limit: int,
     entity_id: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> list[asyncpg.Record]:
     """Solo los lugares que el corpus nombra: pintar 242 paises en blanco no informa de nada.
 
     Con `entity_id`, solo los documentos que ademas nombran esa entidad: es el filtro global que
-    una seleccion en otra vista propaga al mapa.
+    una seleccion en otra vista propaga al mapa. Con periodo, solo los documentos fechados dentro.
     """
     conditions = ["p.level = $1"]
     args: list[object] = [level]
@@ -27,6 +33,7 @@ async def by_level(
             "join entity_mentions e on e.doc_id = m.doc_id "
             f"and e.entity_id = ${len(args)}"
         )
+    dated = period.documents("m.doc_id", date_from, date_to, args)
 
     async with pool.acquire() as connection:
         return await connection.fetch(
@@ -39,7 +46,7 @@ async def by_level(
             from place_mentions m
             join places p using (place_id)
             {join}
-            where {" and ".join(conditions)}
+            where {" and ".join(conditions)}{dated}
             group by 1, 2, 3, 4, 5, 6
             order by documents desc
             limit {limit}

@@ -20,6 +20,8 @@ from app.db import documents as documents_db
 from app.db.pool import Pool
 from app.params import (
     BreakdownField,
+    DateFrom,
+    DateTo,
     DocId,
     MatrixColumn,
     OptionalChunkId,
@@ -213,14 +215,18 @@ async def places(
     phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
     limit: int = Query(default=80, ge=1, le=250, description="Cuantos lugares devolver"),
     entity: str | None = Query(default=None, description="Solo documentos que nombran la entidad"),
+    date_from: DateFrom = None,
+    date_to: DateTo = None,
 ) -> Places:
     """Alimenta el mapa coropletico. Solo devuelve lugares que el corpus nombra."""
     value = phenomenon.value if phenomenon else None
-    rows = await places_db.by_level(pool, level.value, value, limit, entity)
+    rows = await places_db.by_level(pool, level.value, value, limit, entity, date_from, date_to)
     return Places(
         level=level.value,
         phenomenon=value,
         entity=entity,
+        date_from=date_from,
+        date_to=date_to,
         features=[
             PlaceFeature(
                 id=row["place_id"],
@@ -403,6 +409,8 @@ async def alerts(
     kind: str | None = Query(default=None, description="Inminencia o Estructural"),
     entity: str | None = Query(default=None, description="Solo alertas que nombran la entidad"),
     limit: int = Query(default=20, ge=1, le=100, description="Cuantas alertas recientes listar"),
+    date_from: DateFrom = None,
+    date_to: DateTo = None,
 ) -> Alerts:
     """Donde y cuando se emitieron alertas, separando el riesgo inminente del estructural.
 
@@ -415,7 +423,7 @@ async def alerts(
     if kind is not None and kind not in alerts_db.KINDS:
         raise HTTPException(422, f"kind tiene que ser uno de {', '.join(alerts_db.KINDS)}")
 
-    counts = await alerts_db.coverage(pool, entity)
+    counts = await alerts_db.coverage(pool, entity, date_from, date_to)
     return Alerts(
         kind=kind,
         alerts=counts["alerts"],
@@ -438,7 +446,7 @@ async def alerts(
                     trace=Trace(doc_id=row["sample_doc"], chunk_id=row["sample_chunk"]),
                 ),
             )
-            for row in await alerts_db.by_territory(pool, kind, entity)
+            for row in await alerts_db.by_territory(pool, kind, entity, date_from, date_to)
         ],
         years=[
             AlertYear(
@@ -447,7 +455,7 @@ async def alerts(
                 imminent=row["imminent"],
                 structural=row["structural"],
             )
-            for row in await alerts_db.by_year(pool, kind, entity)
+            for row in await alerts_db.by_year(pool, kind, entity, date_from, date_to)
         ],
         recent=[
             Alert(
@@ -457,7 +465,7 @@ async def alerts(
                 issued_on=row["issued_on"],
                 trace=Trace(doc_id=row["doc_id"], chunk_id=row["chunk_id"]),
             )
-            for row in await alerts_db.recent(pool, kind, limit, entity)
+            for row in await alerts_db.recent(pool, kind, limit, entity, date_from, date_to)
         ],
     )
 
@@ -470,6 +478,8 @@ async def territory(
     group: str | None = Query(default=None, description="Limitar los municipios a un grupo"),
     kind: str | None = Query(default=None, description="Limitar las alertas a una clase de riesgo"),
     limit: int = Query(default=12, ge=1, le=60, description="Cuantos fragmentos devolver"),
+    date_from: DateFrom = None,
+    date_to: DateTo = None,
 ) -> Territory:
     """La evidencia de un territorio, para el detalle de la barra lateral.
 
@@ -482,14 +492,18 @@ async def territory(
         raise HTTPException(404, f"No hay ningun territorio con id {place_id}")
 
     value = phenomenon.value if phenomenon else None
-    total, rows = await territory_db.fragments(pool, place_id, value, limit)
+    total, rows = await territory_db.fragments(
+        pool, place_id, value, limit, date_from, date_to
+    )
     towns = (
         await territory_db.municipalities(pool, place["name"], group)
         if place["level"] == "department"
         else []
     )
     warnings = (
-        await territory_db.alerts(pool, place_id, kind) if place["level"] == "department" else []
+        await territory_db.alerts(pool, place_id, kind, date_from, date_to)
+        if place["level"] == "department"
+        else []
     )
 
     return Territory(

@@ -1,8 +1,9 @@
-"""Documentos por ano y por fuente, la base de la linea de tiempo.
+"""Documentos por ano, apilados por fenomeno o por fuente: la base de la linea de tiempo.
 
-La serie se parte por observatorio y no se deja como un total: un mismo ano puede crecer porque un
-solo observatorio publico mucho o porque publicaron todos, y son dos lecturas distintas. Apilado,
-el tablero responde a la vez a la tendencia y a la composicion.
+Con los tres fenomenos a la vez, la serie se parte por fenomeno, cada uno en su color: es la
+lectura que pide el anexo (B.5.1) y la unica que deja comparar sus tendencias. Con uno solo, se
+parte por observatorio: un mismo ano puede crecer porque una fuente publico mucho o porque
+publicaron todas, y son dos lecturas distintas.
 """
 
 import asyncpg
@@ -36,7 +37,7 @@ async def by_period(
         rows = await connection.fetch(
             f"""
             select extract(year from d.published_on)::int as year,
-                   f.observatory                          as source,
+                   {"'F' || f.phenomenon" if phenomenon is None else "f.observatory"} as source,
                    count(distinct d.doc_id)::int          as documents
             from document_dates d
             join (select distinct doc_id, phenomenon, observatory from fragments) f using (doc_id)
@@ -48,17 +49,21 @@ async def by_period(
             *args,
         )
 
-    return _stack(rows)
+    return _stack(rows, by_phenomenon=phenomenon is None)
 
 
-def _stack(rows: list[asyncpg.Record]) -> tuple[list[str], list[dict]]:
-    """Filas sueltas (ano, fuente, documentos) a una fila por ano con una columna por serie."""
+def _stack(rows: list[asyncpg.Record], by_phenomenon: bool) -> tuple[list[str], list[dict]]:
+    """Filas sueltas (ano, serie, documentos) a una fila por ano con una columna por serie.
+
+    Los fenomenos se apilan siempre en el mismo orden, F1 abajo: asi un color ocupa el mismo sitio
+    en todas las barras. Las fuentes, de la que mas publica a la que menos.
+    """
     totals: dict[str, int] = {}
     for row in rows:
         source = row["source"] or "sin fuente"
         totals[source] = totals.get(source, 0) + row["documents"]
 
-    ranked = sorted(totals, key=lambda source: totals[source], reverse=True)
+    ranked = sorted(totals) if by_phenomenon else sorted(totals, key=totals.__getitem__, reverse=True)
     named = ranked[:TOP_SOURCES]
     series = [*named, OTHERS] if len(ranked) > TOP_SOURCES else named
 

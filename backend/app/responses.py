@@ -168,6 +168,9 @@ class Places(BaseModel):
     phenomenon: int | None = None
     # Entidad a la que se limito el conteo, cuando el tablero propago esa seleccion.
     entity: str | None = None
+    # Periodo al que se limito el conteo, cuando el filtro global lo fija.
+    date_from: date | None = None
+    date_to: date | None = None
     features: list[PlaceFeature]
 
 
@@ -348,10 +351,11 @@ class TimelinePoint(BaseModel):
 
 
 class Timeline(BaseModel):
-    """Evolucion temporal por fuente.
+    """Evolucion temporal por fenomeno o por fuente.
 
-    `dated` y `total` dicen sobre cuantos documentos se puede afirmar algo; `series` son las fuentes
-    que tienen barra propia, en el orden en que se apilan.
+    `dated` y `total` dicen sobre cuantos documentos se puede afirmar algo; `series` son lo que tiene
+    barra propia, en el orden en que se apila: `F1`, `F2` y `F3` sin filtro de fenomeno, y las
+    fuentes con el filtro puesto.
     """
 
     phenomenon: int | None = None

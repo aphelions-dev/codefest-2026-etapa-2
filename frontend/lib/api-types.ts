@@ -722,6 +722,10 @@ export interface components {
             phenomenon?: number | null;
             /** Entity */
             entity?: string | null;
+            /** Date From */
+            date_from?: string | null;
+            /** Date To */
+            date_to?: string | null;
             /** Features */
             features: components["schemas"]["PlaceFeature"][];
         };
@@ -876,10 +880,11 @@ export interface components {
         };
         /**
          * Timeline
-         * @description Evolucion temporal por fuente.
+         * @description Evolucion temporal por fenomeno o por fuente.
          *
-         *     `dated` y `total` dicen sobre cuantos documentos se puede afirmar algo; `series` son las fuentes
-         *     que tienen barra propia, en el orden en que se apilan.
+         *     `dated` y `total` dicen sobre cuantos documentos se puede afirmar algo; `series` son lo que tiene
+         *     barra propia, en el orden en que se apila: `F1`, `F2` y `F3` sin filtro de fenomeno, y las
+         *     fuentes con el filtro puesto.
          */
         Timeline: {
             /** Phenomenon */
@@ -1116,6 +1121,10 @@ export interface operations {
                 limit?: number;
                 /** @description Solo documentos que nombran la entidad */
                 entity?: string | null;
+                /** @description Primer dia del periodo (ISO 8601); sin el, desde el principio */
+                date_from?: string | null;
+                /** @description Ultimo dia del periodo (ISO 8601); sin el, hasta el final */
+                date_to?: string | null;
             };
             header?: never;
             path?: never;
@@ -1254,6 +1263,10 @@ export interface operations {
                 entity?: string | null;
                 /** @description Cuantas alertas recientes listar */
                 limit?: number;
+                /** @description Primer dia del periodo (ISO 8601); sin el, desde el principio */
+                date_from?: string | null;
+                /** @description Ultimo dia del periodo (ISO 8601); sin el, hasta el final */
+                date_to?: string | null;
             };
             header?: never;
             path?: never;
@@ -1292,6 +1305,10 @@ export interface operations {
                 kind?: string | null;
                 /** @description Cuantos fragmentos devolver */
                 limit?: number;
+                /** @description Primer dia del periodo (ISO 8601); sin el, desde el principio */
+                date_from?: string | null;
+                /** @description Ultimo dia del periodo (ISO 8601); sin el, hasta el final */
+                date_to?: string | null;
             };
             header?: never;
             path: {

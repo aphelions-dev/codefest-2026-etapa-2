@@ -4,6 +4,7 @@ Los nombres son los que declaran las herramientas del agente: cambiar uno cambia
 el tablero y con la ficha, asi que viven en un solo sitio.
 """
 
+from datetime import date
 from enum import Enum
 from typing import Annotated
 
@@ -52,4 +53,13 @@ DocId = Annotated[str, Path(pattern=DOC_ID_PATTERN, description="Identificador d
 OptionalChunkId = Annotated[
     str | None,
     Query(pattern=CHUNK_ID_PATTERN, description="Fragmento en el que centrar la ventana"),
+]
+
+# El filtro global por periodo. Un documento entra cuando todo lo que se sabe de su fecha cae
+# dentro: el que solo trae el ano entra si el periodo cubre ese ano entero (ver `app.db.period`).
+DateFrom = Annotated[
+    date | None, Query(description="Primer dia del periodo (ISO 8601); sin el, desde el principio")
+]
+DateTo = Annotated[
+    date | None, Query(description="Ultimo dia del periodo (ISO 8601); sin el, hasta el final")
 ]
