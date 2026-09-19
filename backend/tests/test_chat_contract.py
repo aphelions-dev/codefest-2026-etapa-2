@@ -22,7 +22,6 @@ from tests.conftest import (
     FakeRetriever,
     FakeVisualizer,
     attack,
-    component,
     decompose,
     fragment,
     safe,
