@@ -1,6 +1,14 @@
 "use client";
 
-import { DatabaseZapIcon, NetworkIcon, PenLineIcon, SearchIcon, ShieldCheckIcon, TableIcon } from "lucide-react";
+import {
+  DatabaseZapIcon,
+  GridIcon,
+  NetworkIcon,
+  PenLineIcon,
+  SearchIcon,
+  ShieldCheckIcon,
+  TableIcon,
+} from "lucide-react";
 
 import {
   ChainOfThought,
@@ -17,6 +25,7 @@ const ICONS: Record<ToolName, typeof SearchIcon> = {
   get_metadata_breakdown: DatabaseZapIcon,
   get_entity_matrix: TableIcon,
   get_cooccurrence: NetworkIcon,
+  get_quadrant: GridIcon,
   get_places: DatabaseZapIcon,
   get_timeline: DatabaseZapIcon,
   get_document: ShieldCheckIcon,

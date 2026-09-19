@@ -1,6 +1,6 @@
 "use client";
 
-import { parseAsInteger, parseAsStringLiteral, useQueryState } from "nuqs";
+import { parseAsInteger, parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 
 /** Los tres fenómenos del reto. Los colores están en `globals.css` como `--f1`, `--f2` y `--f3`. */
 export const PHENOMENA = [
@@ -26,7 +26,20 @@ export function usePhenomenon() {
   return useQueryState("fenomeno", parseAsInteger);
 }
 
+/**
+ * La entidad seleccionada, que es el segundo filtro global del tablero. Seleccionarla en una vista
+ * —una celda de la matriz, un nodo de la red, un punto del cuadrante— reduce las demás a los
+ * documentos que la nombran: es el *brushing and linking* que pide el anexo, y va en la URL para
+ * que un experto pueda compartir exactamente lo que está mirando.
+ */
+export function useEntity() {
+  return useQueryState("entidad", parseAsString);
+}
+
 const LEVELS = ["country", "department"] as const;
+
+/** Los dos niveles de agregación territorial del mapa. */
+export type MapLevel = (typeof LEVELS)[number];
 
 /**
  * Nivel territorial del mapa. Va en la URL por la misma razón, y por defecto sigue al fenómeno:

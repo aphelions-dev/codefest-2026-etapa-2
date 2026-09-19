@@ -27,13 +27,23 @@ type Positioned = { id: string; name: string; type: string; documents: number; x
  * dos anillos. Un grafo dirigido por fuerzas con 26 nodos se cruza consigo mismo; el radial deja
  * leer los vecinos, que es la tarea que el componente tiene que resolver.
  */
-export function Graph({ phenomenon }: { readonly phenomenon: number | null }) {
+export function Graph({
+  phenomenon,
+  entity,
+  onEntity,
+}: {
+  readonly phenomenon: number | null;
+  readonly entity: string | null;
+  readonly onEntity: (entityId: string | null) => void;
+}) {
   const { data, error, loading } = useApi<GraphData>("/entities/cooccurrence", {
     phenomenon: phenomenon ?? undefined,
     min_documents: 4,
   });
-  const [focus, setFocus] = useState<string | null>(null);
   const { open } = useDocument();
+  // El nodo enfocado es el filtro global: así seleccionar aquí también mueve el mapa,
+  // la línea de tiempo y el resto de componentes, que es lo que pide el anexo.
+  const focus = entity;
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 560, height: 320 });
 
@@ -82,7 +92,7 @@ export function Graph({ phenomenon }: { readonly phenomenon: number | null }) {
     <Panel
       source={
         data
-          ? `${nodes.length} entidades y ${edges.length} relaciones. Toca una entidad para ver sus vecinas, o una arista para abrir el documento que la sustenta.`
+          ? `${nodes.length} entidades y ${edges.length} relaciones. Tocar una entidad filtra todo el tablero y deja ver sus vecinas; tocar una arista abre el fragmento que la sustenta.`
           : undefined
       }
       title="Entidades que aparecen juntas"
@@ -102,7 +112,7 @@ export function Graph({ phenomenon }: { readonly phenomenon: number | null }) {
                 <line
                   className="cursor-pointer"
                   key={`${edge.source}-${edge.target}`}
-                  onClick={() => open(edge.sample_doc)}
+                  onClick={() => open(edge.trace.doc_id, edge.trace.chunk_id)}
                   opacity={dimmed ? 0.05 : 0.28}
                   stroke="var(--muted-foreground)"
                   strokeWidth={0.6 + (edge.documents / heaviest) * 3}
@@ -111,7 +121,7 @@ export function Graph({ phenomenon }: { readonly phenomenon: number | null }) {
                   y1={a.y}
                   y2={b.y}
                 >
-                  <title>{`${edge.documents} documentos compartidos · abrir uno`}</title>
+                  <title>{`${edge.documents} documentos compartidos · abrir el fragmento que sustenta la relación`}</title>
                 </line>
               );
             })}
@@ -122,7 +132,7 @@ export function Graph({ phenomenon }: { readonly phenomenon: number | null }) {
                 <g
                   className="cursor-pointer"
                   key={node.id}
-                  onClick={() => setFocus(focus === node.id ? null : node.id)}
+                  onClick={() => onEntity(focus === node.id ? null : node.id)}
                   opacity={dimmed ? 0.18 : 1}
                 >
                   <title>{`${node.name}: ${node.documents} documentos`}</title>

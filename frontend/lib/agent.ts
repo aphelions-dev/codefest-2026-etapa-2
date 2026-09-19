@@ -43,6 +43,9 @@ export type Answer = {
 
 export class AgentUnavailable extends Error {}
 
+// [F1-CSET-005]: el identificador del documento que sustenta una afirmación, en la respuesta.
+const CITATION = /\[(F\d-[A-Z0-9]+-\d+)\]/;
+
 function isTool(name: string): name is ToolName {
   return name in TOOLS;
 }
@@ -92,9 +95,18 @@ export async function ask(question: string): Promise<Answer> {
     });
   }
 
+  // El panel de evidencia se llena con el primer documento que la respuesta cita: los parámetros de
+  // la búsqueda no lo dicen, y leerlo de la propia cita no cuesta ningún token adicional.
+  const cited = CITATION.exec(body.respuesta)?.[1];
+  const withEvidence = activations.map((activation) =>
+    activation.tool === "search_corpus" && cited
+      ? { ...activation, filters: { ...activation.filters, doc_id: cited } }
+      : activation,
+  );
+
   return {
     answer: body.respuesta,
-    activations,
+    activations: withEvidence,
     steps,
     cost: {
       interactions: body.metadata?.num_interacciones ?? 0,

@@ -3,11 +3,15 @@
 from contextlib import asynccontextmanager
 
 import asyncpg
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import aggregate
+from app.agents import Models, Orchestrator
+from app.api import aggregate, chat
 from app.config import settings
+from app.retrieval import Retriever
+from app.tools import Toolbox
 
 
 @asynccontextmanager
@@ -22,9 +26,26 @@ async def lifespan(app: FastAPI):
         if settings.database_url
         else None
     )
+    # El encoder tarda en cargar y ocupa memoria: se carga una vez por proceso, y solo si hay
+    # indice al que preguntar.
+    retriever = (
+        await Retriever.open(app.state.pool)
+        if app.state.pool is not None and settings.load_index
+        else None
+    )
+    app.state.client = httpx.AsyncClient()
+    app.state.toolbox = (
+        Toolbox(pool=app.state.pool, retriever=retriever) if app.state.pool is not None else None
+    )
+    app.state.orchestrator = (
+        Orchestrator(Models(settings, app.state.client), app.state.toolbox, settings)
+        if app.state.toolbox is not None and settings.litellm_api_key
+        else None
+    )
     try:
         yield
     finally:
+        await app.state.client.aclose()
         if app.state.pool is not None:
             await app.state.pool.close()
 
@@ -40,6 +61,7 @@ app.add_middleware(
 
 
 app.include_router(aggregate.router)
+app.include_router(chat.router)
 
 
 @app.get("/health")

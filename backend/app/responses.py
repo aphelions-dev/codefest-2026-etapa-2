@@ -39,7 +39,11 @@ class DocumentFragment(BaseModel):
 
 
 class Document(BaseModel):
-    """El texto original que sustenta una visualizacion."""
+    """El texto original que sustenta una visualizacion, en una ventana de sus fragmentos.
+
+    `total` y `start` situan la ventana dentro del documento: el lector sabe cuanto queda a cada
+    lado y puede pedir el tramo anterior o el siguiente sin traerse el documento entero.
+    """
 
     doc_id: str
     title: str | None = None
@@ -47,12 +51,16 @@ class Document(BaseModel):
     phenomenon: int
     language: str | None = None
     format: str | None = None
+    total: int
+    start: int
     fragments: list[DocumentFragment] = Field(default_factory=list)
 
 
 class MatrixCell(BaseModel):
     """Una celda: el cruce de dos categorias, con el fragmento que la sustenta."""
 
+    # Identificador de la entidad de la fila: es lo que propaga la seleccion a las demas vistas.
+    row_id: str
     row: str
     col: str
     documents: int
@@ -60,10 +68,15 @@ class MatrixCell(BaseModel):
     trace: Trace
 
 
+class MatrixRow(BaseModel):
+    entity_id: str
+    name: str
+
+
 class Matrix(BaseModel):
     """Matriz de calor: dos variables categoricas y una numerica en el color."""
 
-    rows: list[str]
+    rows: list[MatrixRow]
     cols: list[str]
     cols_field: str
     phenomenon: int | None = None
@@ -78,12 +91,16 @@ class GraphNode(BaseModel):
 
 
 class GraphEdge(BaseModel):
-    """Una arista de co-ocurrencia: el peso son los documentos compartidos."""
+    """Una arista de co-ocurrencia: el peso son los documentos compartidos.
+
+    `trace` es el fragmento concreto en el que las dos entidades coinciden: seleccionar una arista
+    tiene que llevar al texto que la sustenta, no solo al documento.
+    """
 
     source: str
     target: str
     documents: int
-    sample_doc: str
+    trace: Trace
 
 
 class Graph(BaseModel):
@@ -95,9 +112,39 @@ class Graph(BaseModel):
     edges: list[GraphEdge]
 
 
+class QuadrantPoint(BaseModel):
+    """Una entidad en el plano. Las dos coordenadas son conteos, no un indice inventado."""
+
+    entity_id: str
+    name: str
+    type: str
+    # Intensidad: documentos fechados que nombran la entidad.
+    documents: int
+    # Tendencia: como se reparten esos documentos entre la mitad reciente y la anterior.
+    recent: int
+    earlier: int
+    trace: Trace
+
+
+class Quadrant(BaseModel):
+    """Cuadrante de priorizacion: intensidad contra tendencia, con las lineas de corte explicitas."""
+
+    phenomenon: int | None = None
+    # Ano que parte el corpus fechado en dos mitades comparables.
+    split_year: int
+    # Medianas de cada eje: son las lineas que dividen el plano en los cuatro cuadrantes.
+    median_documents: float
+    median_recent_share: float
+    dated_documents: int
+    total_documents: int
+    points: list[QuadrantPoint]
+
+
 class PlaceProperties(BaseModel):
     place_id: str
     name: str
+    # ISO 3166-1 alfa-2: lo que necesita la bandera del lugar.
+    iso2: str | None = None
     documents: int
     mentions: int
     trace: Trace
@@ -118,6 +165,8 @@ class Places(BaseModel):
     type: str = "FeatureCollection"
     level: str
     phenomenon: int | None = None
+    # Entidad a la que se limito el conteo, cuando el tablero propago esa seleccion.
+    entity: str | None = None
     features: list[PlaceFeature]
 
 

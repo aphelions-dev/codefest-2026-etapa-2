@@ -24,10 +24,14 @@ create table if not exists places (
     place_id text primary key,
     name     text not null,
     level    text not null,
+    -- ISO 3166-1 alfa-2 del pais al que pertenece el lugar: es el codigo que nombra la bandera.
+    iso2     text,
     lon      double precision,
     lat      double precision,
     geometry jsonb
 );
+
+alter table places add column if not exists iso2 text;
 
 create table if not exists place_mentions (
     place_id   text    not null references places(place_id) on delete cascade,

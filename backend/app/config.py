@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     fast_model: str = "openai/gpt-oss-20b"
     deep_model: str = "openai/gpt-oss-120b"
     cors_origins: str = "http://localhost:3000"
+    # Lo que declara la ficha: tiene que coincidir con el subdominio del agente en Coolify.
+    agent_endpoint: str = "http://localhost:8000/chat"
+    # Proveedor de los modelos, tal como se declara en la ficha.
+    provider: str = "openai"
+    # Sin indice cargado el agente de corpus no puede responder; el resto del servicio si.
+    load_index: bool = True
 
     @property
     def origins(self) -> list[str]:

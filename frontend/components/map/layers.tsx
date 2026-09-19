@@ -67,3 +67,62 @@ export function MapResizer() {
   }, [map]);
   return null;
 }
+
+/** Contorno del lugar abierto, por encima del coroplético: se ve qué está seleccionado. */
+export function SelectionOutline({ geometry, color }: { readonly geometry: GeoJSON.Geometry; readonly color: string }) {
+  return (
+    <MapGeoJSON
+      data={{ type: "Feature", geometry, properties: {} }}
+      fillPaint={false}
+      linePaint={{ "line-color": color, "line-width": 2.5 }}
+    />
+  );
+}
+
+function bounds(geometry: GeoJSON.Geometry): [[number, number], [number, number]] | null {
+  let [west, south, east, north] = [Infinity, Infinity, -Infinity, -Infinity];
+  const walk = (coordinates: unknown): void => {
+    if (typeof (coordinates as unknown[])[0] === "number") {
+      const [lon, lat] = coordinates as [number, number];
+      west = Math.min(west, lon);
+      south = Math.min(south, lat);
+      east = Math.max(east, lon);
+      north = Math.max(north, lat);
+      return;
+    }
+    for (const part of coordinates as unknown[]) walk(part);
+  };
+  if (geometry.type === "GeometryCollection") {
+    geometry.geometries.forEach((part) => walk("coordinates" in part ? part.coordinates : []));
+  } else {
+    walk(geometry.coordinates);
+  }
+  return Number.isFinite(west)
+    ? [
+        [west, south],
+        [east, north],
+      ]
+    : null;
+}
+
+/** Encuadra el lugar abierto al elegirlo, desde el mapa, la lista o un enlace compartido. */
+export function FitToGeometry({
+  geometry,
+  maxZoom,
+  padding,
+}: {
+  readonly geometry: GeoJSON.Geometry;
+  readonly maxZoom: number;
+  readonly padding: { top: number; right: number; bottom: number; left: number };
+}) {
+  const { map, isLoaded } = useMap();
+  useEffect(() => {
+    if (!map || !isLoaded) return;
+    const box = bounds(geometry);
+    // Los paneles translúcidos tapan los bordes del mapa: se encuadra en el hueco visible.
+    if (box) map.fitBounds(box, { padding, maxZoom, duration: 700 });
+    // El relleno cambia al plegar paneles; eso no debe volver a mover la cámara.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, isLoaded, geometry, maxZoom]);
+  return null;
+}

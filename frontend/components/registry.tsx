@@ -6,6 +6,7 @@ import { Bars } from "@/components/charts/bars";
 import { Evidence } from "@/components/charts/evidence";
 import { Graph } from "@/components/charts/graph";
 import { Heatmap } from "@/components/charts/heatmap";
+import { Quadrant } from "@/components/charts/quadrant";
 
 /**
  * Registro de componentes. El componente se deduce del **nombre de la herramienta** que el agente
@@ -20,6 +21,7 @@ export type ToolName =
   | "get_metadata_breakdown"
   | "get_entity_matrix"
   | "get_cooccurrence"
+  | "get_quadrant"
   | "get_places"
   | "get_timeline"
   | "get_document"
@@ -31,13 +33,19 @@ export type Activation = {
   readonly filters?: Record<string, string | number | undefined>;
 };
 
-type Context = { readonly phenomenon: number | null };
+type Context = {
+  readonly phenomenon: number | null;
+  /** Entidad seleccionada en otra vista: resalta lo suyo y atenúa el resto. */
+  readonly entity: string | null;
+  readonly onEntity: (entityId: string | null) => void;
+};
 
 /** Qué tarea analítica resuelve cada herramienta, para el pie del panel y la documentación. */
 export const TOOLS: Record<ToolName, { readonly label: string; readonly task: string }> = {
   get_metadata_breakdown: { label: "Barras", task: "comparación y composición" },
   get_entity_matrix: { label: "Matriz de calor", task: "comparación cruzada de dos categorías" },
   get_cooccurrence: { label: "Red de entidades", task: "relaciones" },
+  get_quadrant: { label: "Cuadrante", task: "priorización por dos criterios" },
   get_places: { label: "Mapa", task: "distribución espacial" },
   get_timeline: { label: "Línea de tiempo", task: "tendencia" },
   get_document: { label: "Evidencia", task: "verificación de la fuente" },
@@ -47,14 +55,24 @@ export const TOOLS: Record<ToolName, { readonly label: string; readonly task: st
 export function render(activation: Activation, context: Context): ReactNode {
   const { tool, filters = {} } = activation;
   const phenomenon = (filters.phenomenon as number | undefined) ?? context.phenomenon;
+  const { entity, onEntity } = context;
 
   switch (tool) {
     case "get_metadata_breakdown":
       return <Bars by={String(filters.by ?? "observatory")} phenomenon={phenomenon} />;
     case "get_entity_matrix":
-      return <Heatmap cols={String(filters.cols ?? "observatory")} phenomenon={phenomenon} />;
+      return (
+        <Heatmap
+          cols={String(filters.cols ?? "observatory")}
+          entity={entity}
+          onEntity={onEntity}
+          phenomenon={phenomenon}
+        />
+      );
     case "get_cooccurrence":
-      return <Graph phenomenon={phenomenon} />;
+      return <Graph entity={entity} onEntity={onEntity} phenomenon={phenomenon} />;
+    case "get_quadrant":
+      return <Quadrant entity={entity} onEntity={onEntity} phenomenon={phenomenon} />;
     case "get_places":
       // El mapa es el lienzo, no un panel: activarlo mueve el radar de fondo, no abre una tarjeta.
       return null;
@@ -63,6 +81,11 @@ export function render(activation: Activation, context: Context): ReactNode {
       return null;
     case "get_document":
     case "search_corpus":
-      return <Evidence docId={(filters.doc_id as string | undefined) ?? null} />;
+      return (
+        <Evidence
+          chunkId={(filters.chunk_id as string | undefined) ?? null}
+          docId={(filters.doc_id as string | undefined) ?? null}
+        />
+      );
   }
 }

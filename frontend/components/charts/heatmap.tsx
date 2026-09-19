@@ -18,7 +18,17 @@ function shade(value: number, max: number): string {
  * "qué entidad domina cada fuente": una fila con el color repartido es un concepto transversal,
  * una fila con una sola celda oscura es un concepto confinado a una fuente.
  */
-export function Heatmap({ cols, phenomenon }: { readonly cols: string; readonly phenomenon: number | null }) {
+export function Heatmap({
+  cols,
+  phenomenon,
+  entity,
+  onEntity,
+}: {
+  readonly cols: string;
+  readonly phenomenon: number | null;
+  readonly entity: string | null;
+  readonly onEntity: (entityId: string | null) => void;
+}) {
   const { data, error, loading } = useApi<Matrix>("/entities/matrix", {
     cols,
     phenomenon: phenomenon ?? undefined,
@@ -26,13 +36,14 @@ export function Heatmap({ cols, phenomenon }: { readonly cols: string; readonly 
 
   const { open } = useDocument();
   const max = data ? Math.max(...data.cells.map((cell) => cell.documents), 1) : 1;
-  const cellAt = (row: string, col: string) => data?.cells.find((c) => c.row === row && c.col === col);
+  const cellAt = (entityId: string, col: string) =>
+    data?.cells.find((cell) => cell.row_id === entityId && cell.col === col);
 
   return (
     <Panel
       source={data ? `${data.rows.length} entidades por ${data.cols.length} fuentes` : undefined}
       title="Entidades por fuente"
-      unit="Color: documentos que nombran la entidad en esa fuente. Toca una celda para abrir su documento."
+      unit="Color: documentos que nombran la entidad en esa fuente. La celda abre el fragmento que la sustenta; el nombre de la fila filtra todo el tablero"
     >
       {!data || data.cells.length === 0 ? (
         <PanelState empty="Sin menciones para este filtro" error={error} loading={loading} />
@@ -50,26 +61,35 @@ export function Heatmap({ cols, phenomenon }: { readonly cols: string; readonly 
               </tr>
             </thead>
             <tbody>
-              {data.rows.map((row) => (
-                <tr key={row}>
-                  <th
-                    className="bg-card sticky left-0 z-10 max-w-40 truncate pr-2 text-left font-normal"
-                    title={row}
-                  >
-                    {row}
+              {data.rows.map((row) => {
+                const selected = entity === row.entity_id;
+                // Con una entidad elegida en cualquier vista, las demás filas se apagan.
+                const dimmed = entity !== null && !selected;
+                return (
+                <tr className={dimmed ? "opacity-25" : undefined} key={row.entity_id}>
+                  <th className="bg-card sticky left-0 z-10 max-w-40 p-0 text-left font-normal">
+                    <button
+                      aria-pressed={selected}
+                      className="hover:text-foreground aria-pressed:text-primary w-full truncate pr-2 text-left"
+                      onClick={() => onEntity(selected ? null : row.entity_id)}
+                      title={`${row.name} · filtrar todo el tablero por esta entidad`}
+                      type="button"
+                    >
+                      {row.name}
+                    </button>
                   </th>
                   {data.cols.map((col) => {
-                    const cell = cellAt(row, col);
+                    const cell = cellAt(row.entity_id, col);
                     const documents = cell?.documents ?? 0;
                     const label = cell
-                      ? `${row} en ${col}: ${documents} documentos, ${cell.mentions} menciones (${cell.trace.doc_id})`
-                      : `${row} en ${col}: sin menciones`;
+                      ? `${row.name} en ${col}: ${documents} documentos, ${cell.mentions} menciones (${cell.trace.chunk_id})`
+                      : `${row.name} en ${col}: sin menciones`;
                     return (
                       <td className="p-0" key={col}>
                         <button
                           className="h-6 w-full rounded-[3px] align-middle disabled:cursor-default"
                           disabled={!cell}
-                          onClick={() => cell && open(cell.trace.doc_id)}
+                          onClick={() => cell && open(cell.trace.doc_id, cell.trace.chunk_id)}
                           style={{ background: shade(documents, max) }}
                           title={cell ? `${label} · abrir el documento` : label}
                           type="button"
@@ -80,7 +100,8 @@ export function Heatmap({ cols, phenomenon }: { readonly cols: string; readonly 
                     );
                   })}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -36,7 +36,8 @@ async def matrix(pool: asyncpg.Pool, cols: str, phenomenon: int | None) -> list[
                 order by count(distinct m.doc_id) desc
                 limit {MATRIX_ROWS}
             )
-            select e.name                                          as row_label,
+            select e.entity_id                                     as row_id,
+                   e.name                                          as row_label,
                    {column}                                        as col_label,
                    count(distinct m.doc_id)::int                    as documents,
                    sum(m.mentions)::int                             as mentions,
@@ -46,8 +47,8 @@ async def matrix(pool: asyncpg.Pool, cols: str, phenomenon: int | None) -> list[
             join entities e using (entity_id)
             join fragments f on f.chunk_id = m.chunk_id
             where m.entity_id in (select entity_id from top_entities) {limit}
-            group by 1, 2
-            order by 1, 2
+            group by 1, 2, 3
+            order by 2, 3
             """,
             *args,
         )
@@ -59,7 +60,8 @@ async def cooccurrence(
     """Dos entidades se conectan si comparten documentos; el peso es cuantos comparten.
 
     Es la alternativa estadistica al grafo formal de tripletas: no inventa una relacion semantica
-    que nadie extrajo, y cada arista se puede sustentar con los documentos que la producen.
+    que nadie extrajo, y cada arista se puede sustentar con los documentos que la producen. La
+    traza de la arista es el fragmento mas denso de la primera entidad en uno de esos documentos.
     """
     phen = "and m.phenomenon = $1" if phenomenon is not None else ""
     phen_args = [phenomenon] if phenomenon is not None else []
@@ -75,14 +77,20 @@ async def cooccurrence(
         edges = await connection.fetch(
             f"""
             with per_doc as (
-                select distinct m.entity_id, m.doc_id
+                -- Un fragmento por entidad y documento: el mas denso, que es el que mejor
+                -- sustenta la arista cuando el evaluador pide ver de donde sale.
+                select m.entity_id,
+                       m.doc_id,
+                       (array_agg(m.chunk_id order by m.mentions desc, m.chunk_id))[1] as chunk_id
                 from entity_mentions m
                 where true {phen}
+                group by 1, 2
             )
             select a.entity_id as source,
                    b.entity_id as target,
                    count(*)::int as documents,
-                   (array_agg(a.doc_id))[1] as sample_doc
+                   (array_agg(a.doc_id   order by a.doc_id))[1] as sample_doc,
+                   (array_agg(a.chunk_id order by a.doc_id))[1] as sample_chunk
             from per_doc a
             join per_doc b on a.doc_id = b.doc_id and a.entity_id < b.entity_id
             where true {focus}

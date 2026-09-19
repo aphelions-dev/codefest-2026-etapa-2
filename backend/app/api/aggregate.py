@@ -11,10 +11,18 @@ from fastapi import APIRouter, HTTPException, Query
 from app.db import breakdown as breakdown_db
 from app.db import entities as entities_db
 from app.db import places as places_db
+from app.db import quadrant as quadrant_db
 from app.db import timeline as timeline_db
 from app.db import documents as documents_db
 from app.db.pool import Pool
-from app.params import BreakdownField, MatrixColumn, Phenomenon, PlaceLevel
+from app.params import (
+    BreakdownField,
+    DocId,
+    MatrixColumn,
+    OptionalChunkId,
+    Phenomenon,
+    PlaceLevel,
+)
 from app.responses import (
     Breakdown,
     BreakdownBucket,
@@ -25,9 +33,12 @@ from app.responses import (
     GraphNode,
     Matrix,
     MatrixCell,
+    MatrixRow,
     PlaceFeature,
     PlaceProperties,
     Places,
+    Quadrant,
+    QuadrantPoint,
     Timeline,
     TimelinePoint,
     Trace,
@@ -61,20 +72,45 @@ async def metadata_breakdown(
     )
 
 
+# Fragmentos por ventana. La mayoria de los documentos cabe entero, pero los mayores pasan del
+# millar: servirlos completos son megabytes de JSON y otros tantos nodos en el DOM del lector.
+WINDOW = 80
+
+
 @router.get("/documents/{doc_id}", summary="El documento y sus fragmentos")
-async def document(pool: Pool, doc_id: str) -> Document:
-    """El texto original detras de cualquier dato del tablero."""
-    rows = await documents_db.fetch(pool, doc_id)
-    if not rows:
+async def document(
+    pool: Pool,
+    doc_id: DocId,
+    around: OptionalChunkId = None,
+    start: int = Query(default=0, ge=0, description="Primer fragmento de la ventana"),
+) -> Document:
+    """El texto original detras de cualquier dato del tablero, en la ventana que contiene `around`.
+
+    Sin `around`, la ventana empieza en `start`. Centrarla en el fragmento citado es lo que cierra
+    la trazabilidad que exige la especificacion: el dato lleva a su `chunk_id`, no solo al `doc_id`.
+    """
+    head = await documents_db.header(pool, doc_id)
+    if head is None:
         raise HTTPException(404, f"No hay ningun documento con doc_id {doc_id}")
-    first = rows[0]
+    if around is not None:
+        if not around.startswith(f"{doc_id}-chunk-"):
+            raise HTTPException(404, f"El fragmento {around} no pertenece a {doc_id}")
+        position = await documents_db.position_of(pool, around)
+        if position is None:
+            raise HTTPException(404, f"No hay ningun fragmento con chunk_id {around}")
+        start = max(0, position - WINDOW // 2)
+    # La ultima ventana se apoya en el final: asi no devuelve dos fragmentos sueltos.
+    start = max(0, min(start, head["total"] - WINDOW))
+    rows = await documents_db.window(pool, doc_id, start, WINDOW)
     return Document(
-        doc_id=first["doc_id"],
-        title=first["title"],
-        observatory=first["observatory"],
-        phenomenon=first["phenomenon"],
-        language=first["language"],
-        format=first["format"],
+        doc_id=head["doc_id"],
+        title=head["title"],
+        observatory=head["observatory"],
+        phenomenon=head["phenomenon"],
+        language=head["language"],
+        format=head["format"],
+        total=head["total"],
+        start=start,
         fragments=[
             DocumentFragment(
                 chunk_id=row["chunk_id"],
@@ -98,6 +134,7 @@ async def entity_matrix(
     rows = await entities_db.matrix(pool, cols.value, value)
     cells = [
         MatrixCell(
+            row_id=row["row_id"],
             row=row["row_label"],
             col=row["col_label"] or "sin dato",
             documents=row["documents"],
@@ -107,7 +144,10 @@ async def entity_matrix(
         for row in rows
     ]
     return Matrix(
-        rows=sorted({cell.row for cell in cells}),
+        rows=[
+            MatrixRow(entity_id=entity_id, name=name)
+            for entity_id, name in sorted({(cell.row_id, cell.row) for cell in cells}, key=lambda pair: pair[1])
+        ],
         cols=sorted({cell.col for cell in cells}),
         cols_field=cols.value,
         phenomenon=value,
@@ -142,7 +182,7 @@ async def entity_cooccurrence(
                 source=edge["source"],
                 target=edge["target"],
                 documents=edge["documents"],
-                sample_doc=edge["sample_doc"],
+                trace=Trace(doc_id=edge["sample_doc"], chunk_id=edge["sample_chunk"]),
             )
             for edge in edges
         ],
@@ -155,13 +195,15 @@ async def places(
     level: PlaceLevel = Query(default=PlaceLevel.country, description="Nivel territorial"),
     phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
     limit: int = Query(default=80, ge=1, le=250, description="Cuantos lugares devolver"),
+    entity: str | None = Query(default=None, description="Solo documentos que nombran la entidad"),
 ) -> Places:
     """Alimenta el mapa coropletico. Solo devuelve lugares que el corpus nombra."""
     value = phenomenon.value if phenomenon else None
-    rows = await places_db.by_level(pool, level.value, value, limit)
+    rows = await places_db.by_level(pool, level.value, value, limit, entity)
     return Places(
         level=level.value,
         phenomenon=value,
+        entity=entity,
         features=[
             PlaceFeature(
                 id=row["place_id"],
@@ -169,6 +211,7 @@ async def places(
                 properties=PlaceProperties(
                     place_id=row["place_id"],
                     name=row["name"],
+                    iso2=row["iso2"],
                     documents=row["documents"],
                     mentions=row["mentions"],
                     trace=Trace(doc_id=row["sample_doc"], chunk_id=row["sample_chunk"]),
@@ -197,3 +240,65 @@ async def timeline(
         total_documents=total,
         points=[TimelinePoint(year=row["year"], documents=row["documents"]) for row in rows],
     )
+
+
+@router.get("/entities/quadrant", summary="Cuadrante de priorizacion de entidades")
+async def entity_quadrant(
+    pool: Pool,
+    phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+) -> Quadrant:
+    """Intensidad contra tendencia: a que entidades mirar primero, sin puntuar ninguna.
+
+    El eje horizontal son los documentos que nombran la entidad y el vertical, que proporcion de
+    ellos esta en la mitad reciente del corpus. Los dos son conteos verificables; las lineas de
+    corte son las medianas, asi que el cuadrante compara entidades entre si y no contra un umbral
+    inventado.
+    """
+    value = phenomenon.value if phenomenon else None
+    split = await quadrant_db.median_year(pool, value)
+    dated, total = await timeline_db.coverage(pool, value)
+    if split is None:
+        return Quadrant(
+            phenomenon=value,
+            split_year=0,
+            median_documents=0,
+            median_recent_share=0,
+            dated_documents=dated,
+            total_documents=total,
+            points=[],
+        )
+
+    rows = await quadrant_db.by_entity(pool, value, split)
+    points = [
+        QuadrantPoint(
+            entity_id=row["entity_id"],
+            name=row["name"],
+            type=row["type"],
+            documents=row["documents"],
+            recent=row["recent"],
+            earlier=row["earlier"],
+            trace=Trace(doc_id=row["sample_doc"], chunk_id=row["sample_chunk"]),
+        )
+        for row in rows
+    ]
+    shares = sorted(point.recent / point.documents for point in points if point.documents)
+    counts = sorted(point.documents for point in points)
+    return Quadrant(
+        phenomenon=value,
+        split_year=split,
+        median_documents=_median(counts),
+        median_recent_share=_median(shares),
+        dated_documents=dated,
+        total_documents=total,
+        points=points,
+    )
+
+
+def _median(values: list[float]) -> float:
+    """La mediana de una lista ya ordenada; 0 si no hay nada que dividir."""
+    if not values:
+        return 0.0
+    middle = len(values) // 2
+    if len(values) % 2:
+        return float(values[middle])
+    return (values[middle - 1] + values[middle]) / 2

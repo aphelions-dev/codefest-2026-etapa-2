@@ -33,7 +33,10 @@ export interface paths {
         };
         /**
          * El documento y sus fragmentos
-         * @description El texto original detras de cualquier dato del tablero.
+         * @description El texto original detras de cualquier dato del tablero, en la ventana que contiene `around`.
+         *
+         *     Sin `around`, la ventana empieza en `start`. Centrarla en el fragmento citado es lo que cierra
+         *     la trazabilidad que exige la especificacion: el dato lleva a su `chunk_id`, no solo al `doc_id`.
          */
         get: operations["document_documents__doc_id__get"];
         put?: never;
@@ -125,6 +128,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/entities/quadrant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cuadrante de priorizacion de entidades
+         * @description Intensidad contra tendencia: a que entidades mirar primero, sin puntuar ninguna.
+         *
+         *     El eje horizontal son los documentos que nombran la entidad y el vertical, que proporcion de
+         *     ellos esta en la mitad reciente del corpus. Los dos son conteos verificables; las lineas de
+         *     corte son las medianas, asi que el cuadrante compara entidades entre si y no contra un umbral
+         *     inventado.
+         */
+        get: operations["entity_quadrant_entities_quadrant_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Responde una consulta del usuario
+         * @description Una consulta, una respuesta completa: texto, insumo de calidad e insumo de eficiencia.
+         *
+         *     El orquestador nunca propaga una excepcion: un 500 no trae `metadata`, y sin `metadata` la
+         *     pregunta cuenta como fallo entero en el bloque de eficiencia. Un error llega hasta aqui como
+         *     una traza con `estado` distinto de `ok`.
+         */
+        post: operations["chat_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent-card": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ficha del sistema multiagente
+         * @description La arquitectura declarada: el agente, su orquestador y los subagentes con sus herramientas.
+         *
+         *     Se sirve desde el mismo despliegue que responde para que no pueda quedar desfasada de lo que el
+         *     sistema hace de verdad: las herramientas salen del propio registro.
+         */
+        get: operations["agent_card_agent_card_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -149,6 +224,41 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AgentCard
+         * @description La ficha de la seccion 2.3: formato propio de ADL, no el estandar A2A.
+         */
+        AgentCard: {
+            agente: components["schemas"]["CardAgent"];
+            orquestador: components["schemas"]["CardOrchestrator"];
+            /** Subagentes */
+            subagentes?: components["schemas"]["CardSubagent"][];
+        };
+        /**
+         * AgentTokens
+         * @description Desglose por agente y modelo: permite calcular el costo con la tarifa de cada uno.
+         */
+        AgentTokens: {
+            /** Agente */
+            agente: string;
+            /** Modelo */
+            modelo: string;
+            /**
+             * Input
+             * @default 0
+             */
+            input: number;
+            /**
+             * Output
+             * @default 0
+             */
+            output: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
         /**
          * Breakdown
          * @description Comparacion, distribucion y composicion sobre la metadata del corpus.
@@ -183,9 +293,91 @@ export interface components {
          * @enum {string}
          */
         BreakdownField: "phenomenon" | "observatory" | "language" | "format";
+        /** CardAgent */
+        CardAgent: {
+            /** Nombre */
+            nombre: string;
+            /** Descripcion */
+            descripcion: string;
+            /** Version */
+            version: string;
+            /** Endpoint */
+            endpoint: string;
+            /** Input Modes */
+            input_modes: string[];
+            /** Output Modes */
+            output_modes: string[];
+        };
+        /** CardOrchestrator */
+        CardOrchestrator: {
+            /** Nombre */
+            nombre: string;
+            /** Descripcion */
+            descripcion: string;
+            /** Modelo */
+            modelo: string;
+            /** Proveedor */
+            proveedor: string;
+            /** Tools */
+            tools?: components["schemas"]["CardTool"][];
+        };
+        /** CardSubagent */
+        CardSubagent: {
+            /** Id */
+            id: string;
+            /** Nombre */
+            nombre: string;
+            /** Descripcion */
+            descripcion: string;
+            /** Modelo */
+            modelo: string;
+            /** Proveedor */
+            proveedor: string;
+            /** Activado Por */
+            activado_por: string;
+            /** Ejemplos De Activacion */
+            ejemplos_de_activacion?: string[];
+            /** Tools */
+            tools?: components["schemas"]["CardTool"][];
+        };
+        /** CardTool */
+        CardTool: {
+            /** Name */
+            name: string;
+            /** Descripcion */
+            descripcion: string;
+            /** Input Parameters */
+            input_parameters?: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * ChatRequest
+         * @description La consulta. `input` es el nombre que usa el bloque de evaluacion para la pregunta.
+         */
+        ChatRequest: {
+            /**
+             * Input
+             * @description La pregunta del usuario
+             */
+            input: string;
+        };
+        /**
+         * ChatResponse
+         * @description Los tres bloques que ADL espera de cada consulta.
+         */
+        ChatResponse: {
+            /** Respuesta */
+            respuesta: string;
+            evaluacion: components["schemas"]["Evaluation"];
+            metadata: components["schemas"]["Metadata"];
+        };
         /**
          * Document
-         * @description El texto original que sustenta una visualizacion.
+         * @description El texto original que sustenta una visualizacion, en una ventana de sus fragmentos.
+         *
+         *     `total` y `start` situan la ventana dentro del documento: el lector sabe cuanto queda a cada
+         *     lado y puede pedir el tramo anterior o el siguiente sin traerse el documento entero.
          */
         Document: {
             /** Doc Id */
@@ -200,6 +392,10 @@ export interface components {
             language?: string | null;
             /** Format */
             format?: string | null;
+            /** Total */
+            total: number;
+            /** Start */
+            start: number;
             /** Fragments */
             fragments?: components["schemas"]["DocumentFragment"][];
         };
@@ -213,6 +409,20 @@ export interface components {
             num_tokens: number;
             /** Text */
             text: string;
+        };
+        /**
+         * Evaluation
+         * @description Insumo de las metricas de calidad: relevancia, fidelidad, toxicidad y tono.
+         */
+        Evaluation: {
+            /** Input */
+            input: string;
+            /** Actual Output */
+            actual_output: string;
+            /** Retrieval Context */
+            retrieval_context?: string[];
+            /** Tools Called */
+            tools_called?: components["schemas"]["ToolCall"][];
         };
         /**
          * Graph
@@ -231,6 +441,9 @@ export interface components {
         /**
          * GraphEdge
          * @description Una arista de co-ocurrencia: el peso son los documentos compartidos.
+         *
+         *     `trace` es el fragmento concreto en el que las dos entidades coinciden: seleccionar una arista
+         *     tiene que llevar al texto que la sustenta, no solo al documento.
          */
         GraphEdge: {
             /** Source */
@@ -239,8 +452,7 @@ export interface components {
             target: string;
             /** Documents */
             documents: number;
-            /** Sample Doc */
-            sample_doc: string;
+            trace: components["schemas"]["Trace"];
         };
         /** GraphNode */
         GraphNode: {
@@ -264,7 +476,7 @@ export interface components {
          */
         Matrix: {
             /** Rows */
-            rows: string[];
+            rows: components["schemas"]["MatrixRow"][];
             /** Cols */
             cols: string[];
             /** Cols Field */
@@ -279,6 +491,8 @@ export interface components {
          * @description Una celda: el cruce de dos categorias, con el fragmento que la sustenta.
          */
         MatrixCell: {
+            /** Row Id */
+            row_id: string;
             /** Row */
             row: string;
             /** Col */
@@ -295,6 +509,39 @@ export interface components {
          * @enum {string}
          */
         MatrixColumn: "observatory" | "phenomenon" | "language" | "format";
+        /** MatrixRow */
+        MatrixRow: {
+            /** Entity Id */
+            entity_id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * Metadata
+         * @description Insumo de las metricas de eficiencia.
+         */
+        Metadata: {
+            /**
+             * Num Interacciones
+             * @default 0
+             */
+            num_interacciones: number;
+            /** Agentes Invocados */
+            agentes_invocados?: string[];
+            tokens?: components["schemas"]["Tokens"];
+            /** Tokens Por Agente */
+            tokens_por_agente?: components["schemas"]["AgentTokens"][];
+            /**
+             * Latencia Ms
+             * @default 0
+             */
+            latencia_ms: number;
+            /**
+             * Estado
+             * @default ok
+             */
+            estado: string;
+        };
         /**
          * Phenomenon
          * @description Los tres fenomenos del reto.
@@ -331,6 +578,8 @@ export interface components {
             place_id: string;
             /** Name */
             name: string;
+            /** Iso2 */
+            iso2?: string | null;
             /** Documents */
             documents: number;
             /** Mentions */
@@ -351,8 +600,49 @@ export interface components {
             level: string;
             /** Phenomenon */
             phenomenon?: number | null;
+            /** Entity */
+            entity?: string | null;
             /** Features */
             features: components["schemas"]["PlaceFeature"][];
+        };
+        /**
+         * Quadrant
+         * @description Cuadrante de priorizacion: intensidad contra tendencia, con las lineas de corte explicitas.
+         */
+        Quadrant: {
+            /** Phenomenon */
+            phenomenon?: number | null;
+            /** Split Year */
+            split_year: number;
+            /** Median Documents */
+            median_documents: number;
+            /** Median Recent Share */
+            median_recent_share: number;
+            /** Dated Documents */
+            dated_documents: number;
+            /** Total Documents */
+            total_documents: number;
+            /** Points */
+            points: components["schemas"]["QuadrantPoint"][];
+        };
+        /**
+         * QuadrantPoint
+         * @description Una entidad en el plano. Las dos coordenadas son conteos, no un indice inventado.
+         */
+        QuadrantPoint: {
+            /** Entity Id */
+            entity_id: string;
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Documents */
+            documents: number;
+            /** Recent */
+            recent: number;
+            /** Earlier */
+            earlier: number;
+            trace: components["schemas"]["Trace"];
         };
         /**
          * Timeline
@@ -376,6 +666,44 @@ export interface components {
             year: number;
             /** Documents */
             documents: number;
+        };
+        /**
+         * Tokens
+         * @description Consumo de toda la solucion, no solo del orquestador.
+         */
+        Tokens: {
+            /**
+             * Input
+             * @default 0
+             */
+            input: number;
+            /**
+             * Output
+             * @default 0
+             */
+            output: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
+        /**
+         * ToolCall
+         * @description Una herramienta invocada, con sus parametros y lo que devolvio.
+         */
+        ToolCall: {
+            /** Name */
+            name: string;
+            /** Input Parameters */
+            input_parameters?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Output
+             * @default
+             */
+            output: string;
         };
         /**
          * Trace
@@ -445,9 +773,15 @@ export interface operations {
     };
     document_documents__doc_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Fragmento en el que centrar la ventana */
+                around?: string | null;
+                /** @description Primer fragmento de la ventana */
+                start?: number;
+            };
             header?: never;
             path: {
+                /** @description Identificador del documento */
                 doc_id: string;
             };
             cookie?: never;
@@ -553,6 +887,8 @@ export interface operations {
                 phenomenon?: components["schemas"]["Phenomenon"] | null;
                 /** @description Cuantos lugares devolver */
                 limit?: number;
+                /** @description Solo documentos que nombran la entidad */
+                entity?: string | null;
             };
             header?: never;
             path?: never;
@@ -610,6 +946,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    entity_quadrant_entities_quadrant_get: {
+        parameters: {
+            query?: {
+                /** @description Limitar a un fenomeno */
+                phenomenon?: components["schemas"]["Phenomenon"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quadrant"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    agent_card_agent_card_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCard"];
                 };
             };
         };

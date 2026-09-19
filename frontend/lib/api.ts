@@ -10,6 +10,7 @@ export type Breakdown = Get<"/metadata/breakdown">;
 export type Matrix = Get<"/entities/matrix">;
 export type Graph = Get<"/entities/cooccurrence">;
 export type Places = Get<"/places">;
+export type Quadrant = Get<"/entities/quadrant">;
 export type Timeline = Get<"/timeline">;
 export type Document = Get<"/documents/{doc_id}">;
 
