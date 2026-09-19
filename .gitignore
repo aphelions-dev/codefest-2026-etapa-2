@@ -17,3 +17,6 @@ next-env.d.ts
 # Claude
 CLAUDE.local.md
 .claude/settings.local.json
+
+# Documentos de la organizacion: se consultan en local y nunca se versionan.
+docs/*.pdf
