@@ -59,8 +59,8 @@ curl -X POST https://agent.<equipo>.codefest2026.augusta.avaldigitallabs.com/cha
 ```
 
 Responde el JSON de la sección 2.4 de la especificación: `respuesta`, `evaluacion` y `metadata`.
-La ficha del sistema multiagente (§2.3) se sirve en `GET /agent-card`, generada desde el propio
-registro de herramientas para que no pueda quedar desfasada de lo que el sistema hace.
+La ficha del sistema multiagente (§2.3) es [`agent_card.json`](agent_card.json), generada desde la
+declaración de agentes para que no pueda quedar desfasada de lo que el sistema hace.
 
 ---
 
@@ -87,11 +87,12 @@ uv run --env-file ../.env uvicorn app.main:app --port 8000
 cd frontend && pnpm install && pnpm dev
 ```
 
-El tablero queda en `http://localhost:3000` y la API en `http://127.0.0.1:8000`; `/health` responde
-`{"status":"ok"}` cuando el backend está arriba. Todo en contenedores: `docker compose up --build`.
+El tablero queda en `http://localhost:3000` y la API en `http://127.0.0.1:8000`.
+Todo en contenedores: `docker compose up --build`.
 
-Sin `DATABASE_URL` el servicio arranca igual y solo falla lo que consulta datos: el contenedor tiene
-que poder desplegarse y responder al healthcheck antes de que exista la base.
+Sin `DATABASE_URL` el servicio arranca igual, pero `/health` responde 503: el contenedor tiene que
+poder desplegarse antes de que exista la base, y a la vez un proceso que no puede leer el corpus
+no puede darse por sano.
 
 ### Cargar los datos
 
@@ -125,6 +126,62 @@ cd frontend && pnpm api:types    # con el backend corriendo en :8000
 
 ---
 
+### Salud del servicio
+
+`GET /health` consulta la base de datos antes de responder: un proceso que contesta pero no puede
+leer el corpus está caído a efectos de la demo.
+
+```json
+{"status": "ok", "database": "ok", "agent": "ok"}
+```
+
+Devuelve **503** si no hay base de datos o si no responde. `agent` vale `deshabilitado` cuando
+faltan el proxy o los identificadores de modelo: el contenedor arranca igual, para que un
+despliegue no se revierta mientras se termina de configurar.
+
+## El asistente conversacional (Reto 1)
+
+Un único endpoint, `POST /chat`:
+
+```bash
+curl -X POST http://127.0.0.1:8000/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"input": "¿Qué desafíos plantea la IA en las operaciones espaciales?"}'
+```
+
+Responde con el contrato de la especificación: `respuesta`, `evaluacion` (con `retrieval_context`
+y `tools_called`) y `metadata` (tokens por agente, número de interacciones, latencia y estado).
+
+El diseño del grafo, el reparto de modelos y las defensas frente a inyección están en la
+sección 2 de [`docs/arquitectura.md`](docs/arquitectura.md).
+
+### Los identificadores de modelo no se suponen
+
+`FAST_MODEL` y `DEEP_MODEL` tienen que ser los que expone el proxy, que cambian entre entornos:
+
+```bash
+curl -s -H "Authorization: Bearer $LITELLM_API_KEY" "$LITELLM_BASE_URL/models"
+```
+
+Con esos valores puestos se genera la ficha del agente, que se produce a partir de la declaración
+de agentes y nunca se escribe a mano:
+
+```bash
+cd backend && PYTHONUTF8=1 uv run --env-file ../.env python -m scripts.agent_card
+```
+
+El script verifica contra `GET /v1/models` que los dos identificadores existen antes de escribir
+`agent_card.json`.
+
+### Tests
+
+```bash
+cd backend && PYTHONUTF8=1 uv run --group dev pytest
+```
+
+Cubren los dos guardarraíles con casos conocidos de inyección, el verificador, y el grafo completo
+de punta a punta con el proxy y el índice mockeados.
+
 ## Despliegue
 
 Tres recursos en Coolify, cada uno con build pack **Dockerfile** y su dominio propio:
@@ -146,27 +203,28 @@ Pasos, iguales para los tres (Anexo A de la especificación):
 4. **Variables**: las de la tabla en *Environment Variables*.
 
 Las credenciales van en *Environment Variables* de cada recurso, **nunca** en el repositorio ni como
-build args: un build arg queda dentro de la imagen. El endpoint declarado en la ficha del agente
-(`AGENT_ENDPOINT`) tiene que coincidir con el subdominio `agent.` configurado.
+build args: un build arg queda dentro de la imagen. El endpoint que declara
+[`agent_card.json`](agent_card.json) tiene que coincidir con el subdominio `agent.` configurado.
 
 Ambos Dockerfiles construyen imágenes autosuficientes, corren sin root y traen `HEALTHCHECK`.
 
 ### Variables de entorno
 
-| Variable | Quién la usa | Para qué |
+| Variable | Obligatoria | Qué es |
 |---|---|---|
-| `DATABASE_URL` | backend | Postgres con el índice y los precómputos |
-| `LITELLM_BASE_URL` | backend | Endpoint de modelos, compatible con OpenAI |
-| `LITELLM_API_KEY` | backend | Clave del endpoint de modelos |
-| `FAST_MODEL` / `DEEP_MODEL` | backend | Modelo del agente de visualizaciones y del de corpus |
-| `PROVIDER` | backend | Proveedor declarado en la ficha |
-| `AGENT_ENDPOINT` | backend | URL pública que declara la ficha |
-| `CORS_ORIGINS` | backend | Orígenes permitidos, separados por coma |
-| `LOAD_INDEX` | backend | `false` levanta el servicio sin cargar el encoder |
-| `NEXT_PUBLIC_API_URL` | frontend (build) | Dónde está la API |
-| `NEXT_PUBLIC_SURFACE` | frontend (build) | `dashboard` o `chat` |
+| `DATABASE_URL` | sí | Postgres con pgvector y la tabla `fragments` de la Etapa 1 |
+| `LITELLM_BASE_URL` | sí | El proxy, incluyendo `/v1` |
+| `LITELLM_API_KEY` | sí | La clave de la organización. Nunca como build arg |
+| `FAST_MODEL` | sí | Identificador del modelo barato, de `GET /v1/models` |
+| `DEEP_MODEL` | sí | Identificador del modelo grande, de `GET /v1/models` |
+| `CORS_ORIGINS` | sí | Los dominios de `frontagent.` y `dashboard.`, separados por coma |
+| `HNSW_EF_SEARCH`, `EVIDENCE_THRESHOLD`, `TOP_K`, `MAX_FRAGMENTS_PER_DOC`, `MAX_RETRIES` | no | Valores medidos en la Etapa 1; solo se tocan con una medición delante |
+| `NEXT_PUBLIC_API_URL` | sí, en el build del frontend | Dónde está la API |
+| `NEXT_PUBLIC_SURFACE` | sí, en el build del frontend | `dashboard` o `chat` |
 
----
+La imagen del backend lleva dentro BGE-M3 (~2,2 GB), el encoder con el que se generó el índice.
+La primera construcción tarda; las siguientes reutilizan la capa. El contenedor no descarga pesos
+en tiempo de ejecución a propósito: si faltaran, es mejor que falle al arrancar y no en la demo.
 
 ## Licencia
 

@@ -14,26 +14,21 @@ agregaciones sí; autoridad analítica inventada, no.
 ## 1. Visión general
 
 ```
-                      ┌──────────────────────────────────────────┐
-  pregunta en         │            ORQUESTADOR (código)          │
-  lenguaje natural ──▶│   enruta sin consumir modelo; no lee     │
-                      │   nunca el corpus                        │
-                      └───────┬──────────────────────┬───────────┘
-                              │                      │
-              ┌───────────────▼──────┐   ┌───────────▼─────────────────┐
-              │  AGENTE DE CORPUS    │   │ AGENTE DE VISUALIZACIONES   │
-              │  search_corpus       │   │ elige componente y filtros  │
-              │  redacta con citas   │   │ entre seis herramientas     │
-              └───────────┬──────────┘   └───────────┬─────────────────┘
-                          │                          │
-                          ▼                          ▼
+  pregunta en          ┌──────────────────────────────────────────┐
+  lenguaje natural ──▶ │   GRAFO DE AGENTES (LangGraph)           │
+                       │   guardián ▸ orquestador ▸ analista RAG   │
+                       │   ▸ verificador ▸ guardián               │
+                       └───────┬──────────────────────────────────┘
+                               │
+                               ▼
               ┌───────────────────────────────────────────────────┐
               │   API DE AGREGACIÓN (FastAPI)                     │
               │   pgvector: 64.484 fragmentos + precómputos       │
               └───────────────────────────────────────────────────┘
                           │                          │
                   POST /chat (§2.4)          GET /metadata, /entities,
-                                             /places, /timeline, /documents
+                                             /places, /timeline, /documents,
+                                             /presence, /alerts, /quadrant
                           │                          │
               ┌───────────▼──────┐        ┌──────────▼──────────────────┐
               │ frontagent.      │        │ dashboard.                  │
@@ -58,87 +53,168 @@ Separarlos habría significado mantener dos veces la misma agregación y arriesg
 
 ## 2. Reto 1 — el sistema multiagente
 
-### 2.1 Por qué el orquestador no usa modelo
+Cinco agentes en un grafo de LangGraph. Tres son el mínimo que pide la especificación; los dos de
+más son de seguridad, y la seguridad vale el 20% de la nota del Reto 1, de la cual el 75% se mide
+atacando el endpoint desplegado.
 
-La especificación pide un agente principal que «recibe las consultas del usuario y redirecciona la
-tarea a agentes especializados». No pide que esa decisión la tome un modelo, y aquí no la toma.
+```
+        ┌──────────────────┐
+        │ input_guardrail  │ ── ataque ──▶ fin (estado de error)
+        └────────┬─────────┘
+                 ▼
+        ┌──────────────────┐
+        │   orchestrator   │ ── saludo / fuera de alcance ──▶ fin
+        └────────┬─────────┘
+                 ▼
+        ┌──────────────────┐
+        │     retrieve     │  search_corpus + extract_fragments
+        └────────┬─────────┘
+                 ▼
+        ┌──────────────────┐
+        │      write       │ ── sin evidencia ──▶ fin
+        └────────┬─────────┘
+                 ▼
+        ┌──────────────────┐
+        │      verify      │ ── rechazo ──▶ rewrite ──▶ retrieve
+        └────────┬─────────┘                (tope: 2 vueltas)
+                 ▼
+        ┌──────────────────┐
+        │ output_guardrail │
+        └────────┬─────────┘
+                 ▼
+             respuesta
+```
 
-El orquestador enruta con reglas sobre el texto de la pregunta, y eso compra tres cosas:
+| Agente | Modelo | Qué hace | Por qué separado |
+|---|---|---|---|
+| `input_guardrail` | barato | Clasifica el mensaje antes de que entre al grafo | Corta el ataque directo antes de gastar el modelo grande |
+| `orchestrator` | grande | Enruta y descompone la pregunta en formulaciones de búsqueda | Decidir la ruta mal cuesta toda la consulta |
+| `rag_analyst` | grande | Recupera y redacta con la evidencia | Es el razonamiento real del sistema |
+| `verifier` | barato | Fidelidad, trazabilidad e inyección indirecta | Auditar es más fácil que redactar |
+| `output_guardrail` | barato | Toxicidad y rastros de inyección | Última barrera sobre el texto ya escrito |
 
-1. **Una interacción menos por pregunta.** El Bloque B mide tokens, número de interacciones y
-   latencia, normalizados contra los demás equipos. Una llamada de enrutamiento cuesta entre 500 y
-   900 tokens de entrada y entre 1 y 3 segundos, en cada pregunta, para elegir entre tres caminos.
-2. **Determinismo.** El mismo texto se enruta siempre igual, así que el comportamiento del sistema
-   se puede probar sin gastar presupuesto y sin varianza entre ejecuciones.
-3. **Contención estructural de la inyección.** El enrutador **no lee nunca el corpus**. Un fragmento
-   envenenado no tiene ninguna ruta por la que hacerse enrutar, porque lo que decide el camino es la
-   pregunta del usuario, no el contenido recuperado.
+### 2.1 El redactor no tiene herramientas
 
-El coste es que un enrutador de reglas se equivoca en preguntas ambiguas. Se acepta porque el
-dominio es cerrado —tres fenómenos, seis herramientas— y porque el fallo es recuperable: si una
-pregunta de mapa cae en el agente de corpus, el usuario recibe una respuesta correcta con citas,
-solo que sin el componente activado.
+`retrieve` y `write` son dos nodos del mismo agente. Separarlos tiene dos motivos: redactando sin
+más tarea se redacta mejor, y **un fragmento envenenado no tiene nada que invocar** aunque consiga
+convencer al modelo. El redactor recibe texto y devuelve texto.
 
-### 2.2 Los agentes especializados
+Por el mismo razonamiento, la búsqueda no la decide el modelo: toda pregunta sobre el contenido
+necesita evidencia, así que preguntarle al modelo si quiere buscar es pagar una llamada por una
+respuesta que ya se conoce.
 
-**Agente de corpus.** Recupera y redacta. La búsqueda **no la decide el modelo**: toda pregunta
-sobre el contenido necesita evidencia, así que preguntarle al modelo si quiere buscar es pagar una
-llamada por una respuesta que ya se conoce. El modelo recibe la evidencia ya recuperada y solo
-redacta, sin herramientas — lo que además lo deja sin ninguna acción que un fragmento malicioso
-pueda inducir.
+### 2.2 El ciclo de reintento, y por qué tiene tope
 
-Sus citas se **verifican mecánicamente** contra la evidencia antes de devolverlas. Los modelos de
-este tamaño citan bien la mayoría de las veces y de cuando en cuando inventan una referencia
-plausible; el prompt no lo evita, la comprobación sí.
+Cuando el verificador rechaza una respuesta, el orquestador reformula con el motivo delante y se
+vuelve a recuperar y a redactar. El tope es de **dos vueltas**: cada una son dos llamadas al modelo
+grande y una al barato, y el Bloque B mide tokens, interacciones y latencia normalizados contra los
+demás equipos. Al agotarlo se entrega lo que haya con `estado: no_verificada` — declarado, nunca
+fallando.
 
-**Agente de visualizaciones.** Es el único que usa *tool calling*. Elige entre seis herramientas y,
-con los datos que devuelven, redacta un resumen corto. Usa el **modelo barato**: elegir entre seis
-opciones y describir conteos no exige razonamiento profundo, y el presupuesto es dinero.
+### 2.3 Reparto de modelos y el presupuesto de $100 USD
 
-### 2.3 Cómo el agente activa un componente sin gastar un token
+El presupuesto es en dinero, no en tokens: cuando se agota, la clave deja de responder y no hay
+demo. La regla es que **todo lo que no sea razonar va al modelo barato**.
 
-El tablero deduce el componente **del nombre de la herramienta que el agente invocó**, que ya viaja
-obligatoriamente en `evaluacion.tools_called` dentro de la respuesta. No hay un campo extra, ni una
-especificación de gráfico que el modelo tenga que escribir.
+- **`gpt-oss-120b`** en tres llamadas: enrutar, descomponer y redactar.
+- **`gpt-oss-20b`** en tres: los dos guardianes y el verificador, que son clasificación binaria con
+  una respuesta de una línea en JSON.
 
-La alternativa habitual —dejar que el modelo emita una especificación tipo Vega-Lite— se descartó
-por cuatro razones: cuesta cientos de tokens por respuesta, no garantiza la paleta consistente que
-exige B.2.5, impide validar que el gráfico corresponda a la tarea analítica (B.2.2), y abre una
-superficie de inyección, porque un fragmento del corpus podría influir en lo que se dibuja.
+Los identificadores se confirman contra `GET /v1/models` del proxy y **no se suponen**: el valor que
+parecía obvio, `openai/gpt-oss-20b`, no es el que el proxy expone y habría fallado en la primera
+consulta del día de la evaluación.
 
-Con un registro cerrado, el modelo decide **qué mirar**; el backend decide **qué dice el dato**.
+Tres decisiones más que bajan el gasto sin tocar la calidad:
 
-### 2.4 Seguridad
+1. **`reasoning_effort: "low"`** en todas las llamadas. Los `gpt-oss` razonan antes de responder y
+   el razonamiento cuenta como tokens de salida. Medido: para un simple «di hola», 23 de los 33
+   tokens de salida fueron razonamiento.
+2. **`max_tokens` no se ajusta nunca.** Con el margen justo, esos modelos gastan el presupuesto
+   razonando y no emiten nada. Se paga y no se recibe.
+3. **Las respuestas fijas no pasan por el grafo completo.** Un saludo o una pregunta ajena al corpus
+   se responden con un texto propio: no se recupera, no se verifica y no se inspecciona. Verificar
+   un texto que escribimos nosotros es pagar dos llamadas por nada.
+
+Medido de punta a punta contra el proxy del reto: el camino completo son **6 llamadas a modelo,
+~33.000 tokens y 17 s**; un ataque muere en la primera capa con **1 llamada, 344 tokens y 1,2 s**.
+
+### 2.4 Trazabilidad: la comprobación dura no usa modelo
+
+Saber si un identificador citado está entre los documentos recuperados es **comparar dos
+conjuntos**: es exacto, es gratis y no falla. Al modelo solo se le pregunta lo que exige leer y
+entender. La cadena es:
+
+1. `search_corpus` devuelve cada fragmento con su `doc_id` y su `chunk_id`.
+2. El redactor los ve en la evidencia y cita `[F2-CSIS-100]`.
+3. El verificador comprueba en código que cada identificador citado se recuperó, y rechaza si no.
+4. `evaluacion.retrieval_context` entrega cada fragmento prefijado con `[doc_id · chunk_id]`.
+5. `GET /documents/{doc_id}` devuelve el documento completo.
+
+**Una lección medida:** el patrón de extracción tiene que leer lo que el modelo escribe de verdad,
+no lo que debería escribir. `gpt-oss-120b` usa `U+2011`, el guion no separable, y mete espacios
+dentro de los corchetes. Con el patrón ingenuo no se extraía ninguna cita, el conjunto salía vacío y
+la respuesta pasaba la verificación **sin que nadie hubiera mirado sus fuentes** — peor que no tener
+la comprobación, porque parecía tenerla. Se normalizan guiones y espacios tipográficos antes de
+extraer, y vale tanto el `doc_id` como el `chunk_id`, porque el redactor cita indistintamente.
+
+### 2.5 Seguridad
+
+De los ataques medidos, los directos los frena la alineación del modelo. El que de verdad pasa es el
+indirecto: el que viaja dentro de un fragmento recuperado, porque el corpus contiene documentos que
+nadie escribió pensando en un asistente.
 
 | Defensa | Dónde | Qué para |
 |---|---|---|
-| Enrutador sin LLM que no lee el corpus | `agents.py` | El contenido recuperado no puede cambiar el camino de ejecución |
-| Redactor sin herramientas | agente de corpus | Un fragmento envenenado no tiene ninguna acción que invocar (*action gating*) |
-| Contexto entre delimitadores, declarado como datos | prompt del redactor | Inyección indirecta: es la única defensa que la para, porque el escaneo de entrada y salida no la detecta |
-| Negativa explícita a revelar prompt, ficha o configuración | prompts | Extracción de prompt |
-| Tope duro de iteraciones y sin reintentos automáticos | `MAX_STEPS` | Agotamiento del presupuesto; además, un reintento contaría como interacción |
-| Errores sin trazado en el cuerpo de la respuesta | `chat.py` | Fuga de configuración a través de mensajes de error |
-| Credenciales solo por variable de entorno | `config.py` | No hay ningún secreto en el repositorio ni en la imagen |
+| Clasificador de entrada | `guardrails.py` | Anulación de instrucciones, extracción del prompt, suplantación, jailbreak |
+| Contexto entre delimitadores, declarado como datos | `prompts.evidence_block` | Inyección indirecta: es la única defensa que la para |
+| Redactor sin herramientas | nodo `write` | Un fragmento envenenado no tiene ninguna acción que invocar |
+| Verificación de citas en código | `verifier.py` | Referencias inventadas, que el prompt no evita |
+| Clasificador de salida | `guardrails.py` | Toxicidad y fuga del prompt del sistema |
+| Tope duro de iteraciones | `graph.py` | Agotamiento del presupuesto |
+| Credenciales solo por variable de entorno | `config.py` | Ningún secreto en el repositorio ni en la imagen |
 
-### 2.5 El contrato de la respuesta
+Dos decisiones que sostienen lo anterior:
 
-`app/schema.py` contiene los modelos del §2.4 **con los nombres en español**, al contrario que el
-resto del código, que usa identificadores en inglés en todas sus capas. No son nombres nuestros: son
-los que consumen las métricas de ADL. Viven aislados en un único módulo, no se reutilizan en ninguna
-otra capa, y ese aislamiento es deliberado — así queda claro dónde termina nuestro dominio y empieza
-el contrato ajeno.
+- **Los guardianes fallan hacia el lado útil.** Si el proxy no responde o devuelve algo ilegible,
+  dejan pasar. Un guardián que convierte una caída del proxy en un bloqueo generalizado tumba la
+  demo entera, y las otras dos capas siguen en pie.
+- **Cuando la entrada se bloquea no viaja el motivo, ni las herramientas que lo detectaron.**
+  Decirle al atacante qué regla saltó es enseñarle cuál es el siguiente intento. El motivo queda en
+  el log estructurado, que es donde se audita.
 
-Dos decisiones sobre la contabilidad:
+### 2.6 El contrato de la respuesta
 
-- **`tokens_por_agente` se acumula por agente, no por modelo.** Dos agentes pueden compartir modelo;
-  si se agrupara por modelo, el desglose atribuiría al orquestador lo que gastó un subagente y el
-  costo estimado por pregunta saldría mal.
-- **El endpoint nunca devuelve 500.** Un error sin `metadata` cuenta como fallo entero en el bloque
-  de eficiencia. Un fallo se devuelve como respuesta con `estado` distinto de `ok`, conservando la
-  evidencia que ya se había recuperado.
+Los modelos del §2.4 de la especificación viven en `app/responses.py` **con los nombres en
+español**, al contrario que el resto del código. No son nombres nuestros: son los que consumen las
+métricas de ADL. Todos con `extra="forbid"`, y la respuesta se arma en un solo sitio a partir del
+estado final del grafo, venga por donde venga: es imposible que un camino entregue un JSON con un
+campo de más o de menos.
+
+- **`tokens_por_agente` se acumula por agente, no por modelo.** Dos agentes comparten modelo; si se
+  agrupara por modelo, el desglose atribuiría al orquestador lo que gastó un subagente.
+- **`metadata.tokens` suma el `usage` de todas las llamadas.** Cada llamada devuelve texto y gasto
+  juntos, así que perderlo por el camino no es posible.
+- **`metadata.num_interacciones` cuenta llamadas a modelo**, que es la definición de la
+  especificación.
+- **`metadata.latencia_ms`** se mide con `time.perf_counter()` alrededor del manejador completo.
+
+### 2.7 Estados
+
+| `metadata.estado` | Cuándo |
+|---|---|
+| `ok` | Respuesta generada y verificada |
+| `sin_evidencia` | Ningún fragmento superó el umbral; no se inventa una respuesta |
+| `no_verificada` | Se agotaron los reintentos; se entrega lo que hay, declarado |
+| `error_entrada_bloqueada` | El guardián de entrada cortó la consulta |
+| `error_salida_bloqueada` | El guardián de salida retuvo la respuesta |
+
+### 2.8 Observabilidad
+
+Logging estructurado en JSON, una línea por evento. Cada llamada a modelo registra agente, modelo,
+tokens de entrada y salida, y latencia. Cada bloqueo registra qué capa lo decidió y por qué. Es lo
+que permite auditar una respuesta después, sin que nada de eso llegue al usuario.
 
 ---
-
 ## 3. Reto 2 — propuesta de visualización por fenómeno
 
 ### 3.1 El método: de la tarea analítica al componente
@@ -320,7 +396,8 @@ pantalla amontonan sus etiquetas y dejan de resolver la tarea que justifica su e
 | Grafo formal de tripletas | La Etapa 1 no construyó el grafo opcional. B.3.1 declara la red de co-ocurrencia alternativa legítima, y es la que no inventa relaciones semánticas que nadie extrajo |
 | Extracción de entidades con LLM | 1.813 documentos por inferencia se comen el presupuesto. Se extraen por diccionario y coincidencia de texto, que para nombres propios no necesita razonamiento |
 | Reranker sobre la recuperación | Medido contra el ground truth de la Etapa 1, empeoraba el resultado |
-| Reintentos automáticos ante error del modelo | Cada reintento contaría como interacción en el bloque de eficiencia |
+| Reintentos automáticos ante error de red o del proxy | Cada reintento contaría como interacción en el bloque de eficiencia. El único ciclo que repite es el del verificador (§2.2), que es una decisión de calidad y tiene tope |
+| Agente generador de visualizaciones | El equipo decidió centrar esta entrega en el Reto 1. El tablero funciona con sus filtros y sus datos, pero **el agente no activa componentes**: el registro y los nombres de herramienta quedan preparados para que añadirlo sea un nodo más |
 
 ---
 

@@ -239,37 +239,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Responde una consulta del usuario
-         * @description Una consulta, una respuesta completa: texto, insumo de calidad e insumo de eficiencia.
-         *
-         *     El orquestador nunca propaga una excepcion: un 500 no trae `metadata`, y sin `metadata` la
-         *     pregunta cuenta como fallo entero en el bloque de eficiencia. Un error llega hasta aqui como
-         *     una traza con `estado` distinto de `ok`.
+         * Pregunta al asistente del radar
+         * @description Una pregunta, una respuesta con su evidencia y su coste.
          */
         post: operations["chat_chat_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agent-card": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Ficha del sistema multiagente
-         * @description La arquitectura declarada: el agente, su orquestador y los subagentes con sus herramientas.
-         *
-         *     Se sirve desde el mismo despliegue que responde para que no pueda quedar desfasada de lo que el
-         *     sistema hace de verdad: las herramientas salen del propio registro.
-         */
-        get: operations["agent_card_agent_card_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -285,7 +258,10 @@ export interface paths {
         };
         /**
          * Health
-         * @description Lo que mira el healthcheck del contenedor antes de dar el servicio por arriba.
+         * @description Lo que mira el healthcheck del contenedor.
+         *
+         *     Comprueba la base de datos: un proceso que responde pero no puede consultar el corpus esta
+         *     caido a efectos de la demo, y marcarlo sano solo retrasa el diagnostico.
          */
         get: operations["health_health_get"];
         put?: never;
@@ -301,39 +277,20 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
-         * AgentCard
-         * @description La ficha de la seccion 2.3: formato propio de ADL, no el estandar A2A.
-         */
-        AgentCard: {
-            agente: components["schemas"]["CardAgent"];
-            orquestador: components["schemas"]["CardOrchestrator"];
-            /** Subagentes */
-            subagentes?: components["schemas"]["CardSubagent"][];
-        };
-        /**
          * AgentTokens
-         * @description Desglose por agente y modelo: permite calcular el costo con la tarifa de cada uno.
+         * @description El gasto de una capa. Sumados dan `metadata.tokens`, nunca solo el del orquestador.
          */
         AgentTokens: {
+            /** Input */
+            input: number;
+            /** Output */
+            output: number;
+            /** Total */
+            total: number;
             /** Agente */
             agente: string;
             /** Modelo */
             modelo: string;
-            /**
-             * Input
-             * @default 0
-             */
-            input: number;
-            /**
-             * Output
-             * @default 0
-             */
-            output: number;
-            /**
-             * Total
-             * @default 0
-             */
-            total: number;
         };
         /**
          * Alert
@@ -465,78 +422,17 @@ export interface components {
          * @enum {string}
          */
         BreakdownField: "phenomenon" | "observatory" | "language" | "format";
-        /** CardAgent */
-        CardAgent: {
-            /** Nombre */
-            nombre: string;
-            /** Descripcion */
-            descripcion: string;
-            /** Version */
-            version: string;
-            /** Endpoint */
-            endpoint: string;
-            /** Input Modes */
-            input_modes: string[];
-            /** Output Modes */
-            output_modes: string[];
-        };
-        /** CardOrchestrator */
-        CardOrchestrator: {
-            /** Nombre */
-            nombre: string;
-            /** Descripcion */
-            descripcion: string;
-            /** Modelo */
-            modelo: string;
-            /** Proveedor */
-            proveedor: string;
-            /** Tools */
-            tools?: components["schemas"]["CardTool"][];
-        };
-        /** CardSubagent */
-        CardSubagent: {
-            /** Id */
-            id: string;
-            /** Nombre */
-            nombre: string;
-            /** Descripcion */
-            descripcion: string;
-            /** Modelo */
-            modelo: string;
-            /** Proveedor */
-            proveedor: string;
-            /** Activado Por */
-            activado_por: string;
-            /** Ejemplos De Activacion */
-            ejemplos_de_activacion?: string[];
-            /** Tools */
-            tools?: components["schemas"]["CardTool"][];
-        };
-        /** CardTool */
-        CardTool: {
-            /** Name */
-            name: string;
-            /** Descripcion */
-            descripcion: string;
-            /** Input Parameters */
-            input_parameters?: {
-                [key: string]: string;
-            };
-        };
         /**
          * ChatRequest
-         * @description La consulta. `input` es el nombre que usa el bloque de evaluacion para la pregunta.
+         * @description La pregunta del usuario. `input` es lo que manda el frontend de chat ya construido.
          */
         ChatRequest: {
-            /**
-             * Input
-             * @description La pregunta del usuario
-             */
+            /** Input */
             input: string;
         };
         /**
          * ChatResponse
-         * @description Los tres bloques que ADL espera de cada consulta.
+         * @description La respuesta del endpoint, con la estructura exacta que exige la especificacion.
          */
         ChatResponse: {
             /** Respuesta */
@@ -584,7 +480,7 @@ export interface components {
         };
         /**
          * Evaluation
-         * @description Insumo de las metricas de calidad: relevancia, fidelidad, toxicidad y tono.
+         * @description Lo que la organizacion mide: relevancia, fidelidad y trazabilidad de la respuesta.
          */
         Evaluation: {
             /** Input */
@@ -592,7 +488,7 @@ export interface components {
             /** Actual Output */
             actual_output: string;
             /** Retrieval Context */
-            retrieval_context?: string[];
+            retrieval_context?: string[] | null;
             /** Tools Called */
             tools_called?: components["schemas"]["ToolCall"][];
         };
@@ -690,28 +586,19 @@ export interface components {
         };
         /**
          * Metadata
-         * @description Insumo de las metricas de eficiencia.
+         * @description El coste y el recorrido de la respuesta. `num_interacciones` son llamadas a modelo.
          */
         Metadata: {
-            /**
-             * Num Interacciones
-             * @default 0
-             */
+            /** Num Interacciones */
             num_interacciones: number;
             /** Agentes Invocados */
-            agentes_invocados?: string[];
-            tokens?: components["schemas"]["Tokens"];
+            agentes_invocados: string[];
+            tokens: components["schemas"]["Tokens"];
             /** Tokens Por Agente */
-            tokens_por_agente?: components["schemas"]["AgentTokens"][];
-            /**
-             * Latencia Ms
-             * @default 0
-             */
+            tokens_por_agente: components["schemas"]["AgentTokens"][];
+            /** Latencia Ms */
             latencia_ms: number;
-            /**
-             * Estado
-             * @default ok
-             */
+            /** Estado */
             estado: string;
         };
         /**
@@ -1022,30 +909,18 @@ export interface components {
                 [key: string]: number;
             };
         };
-        /**
-         * Tokens
-         * @description Consumo de toda la solucion, no solo del orquestador.
-         */
+        /** Tokens */
         Tokens: {
-            /**
-             * Input
-             * @default 0
-             */
+            /** Input */
             input: number;
-            /**
-             * Output
-             * @default 0
-             */
+            /** Output */
             output: number;
-            /**
-             * Total
-             * @default 0
-             */
+            /** Total */
             total: number;
         };
         /**
          * ToolCall
-         * @description Una herramienta invocada, con sus parametros y lo que devolvio.
+         * @description Una herramienta invocada. El tablero deduce de `name` que componente activar.
          */
         ToolCall: {
             /** Name */
@@ -1054,10 +929,7 @@ export interface components {
             input_parameters?: {
                 [key: string]: unknown;
             };
-            /**
-             * Output
-             * @default
-             */
+            /** Output */
             output: string;
         };
         /**
@@ -1479,26 +1351,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    agent_card_agent_card_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentCard"];
                 };
             };
         };
