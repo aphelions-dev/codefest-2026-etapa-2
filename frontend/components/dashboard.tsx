@@ -74,10 +74,28 @@ export function Dashboard() {
   // La vista decide qué mide el mapa; la entidad seleccionada en cualquier componente lo reduce a
   // los documentos que la nombran.
   const context = [level, phenomenon, entity, view, filter].join("|");
-  const selected = picked?.context === context ? picked.selection : null;
+  const chosen = picked?.context === context ? picked.selection : null;
   const setSelected = (selection: Selection | null) => setPicked(selection ? { context, selection } : null);
 
   const layer = useMapLayer(view, { phenomenon, level, entity, filter, period });
+
+  // Lo elegido se muestra con sus cifras de ahora, no con las del momento del clic: al mover el
+  // periodo, la ficha, el puesto y el popup cambian con el mapa. Si el territorio ya no registra
+  // nada con el filtro, sigue elegido y lo dice, en vez de enseñar una cifra que ya no vale.
+  const current = chosen ? layer.data.find((datum) => datum.id === chosen.place.id) : undefined;
+  const selected: Selection | null = chosen
+    ? {
+        ...chosen,
+        place: current ?? {
+          ...chosen.place,
+          value: 0,
+          headline: "Sin registros con este filtro",
+          facts: [],
+          split: undefined,
+          tags: undefined,
+        },
+      }
+    : null;
   // Lo que la ficha del mapa dice del periodo: cuál recorta la vista, o que esta no tiene fecha.
   const periodNote = !isActive(period)
     ? null
