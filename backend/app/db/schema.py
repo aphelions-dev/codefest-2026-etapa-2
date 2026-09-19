@@ -32,6 +32,8 @@ create table if not exists places (
 );
 
 alter table places add column if not exists iso2 text;
+-- Las formas con que el corpus nombra el lugar: el detalle las marca en cada fragmento.
+alter table places add column if not exists forms text[];
 
 create table if not exists place_mentions (
     place_id   text    not null references places(place_id) on delete cascade,

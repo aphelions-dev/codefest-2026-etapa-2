@@ -9,6 +9,7 @@ coropletico las sirva sin exponer el indice.
 import asyncio
 import json
 import os
+import re
 from pathlib import Path
 
 import asyncpg
@@ -45,11 +46,32 @@ DECOYS = [
     "Gulf of Guinea", "Golfo de Guinea", "New Mexico", "Nuevo Mexico", "Gulf of Mexico",
     "Golfo de Mexico", "University of Georgia", "Atlanta, Georgia", "New Jersey",
     "Indiana University", "Washington, D.C.", "Washington DC",
+    # Homonimos medidos en el corpus (auditoria de 2026-09-19): cada uno contaba documentos que no
+    # hablan del territorio. Un grupo armado, un municipio de otro departamento, una region que
+    # cruza varios, un tratado, una universidad y los estados de Brasil y Venezuela.
+    "Libertadores del Vichada", "Puerto Santander", "Magdalena Medio", "María Magdalena",
+    "Maria Magdalena", "Bajo Cauca", "Bloque Amazonas", "Pacto de Bogotá", "Pacto de Bogota",
+    "b_ADM1_PT: Amazonas", "estado de Amazonas", "estado Amazonas", "state of Amazonas",
+    "Amazonas state", "Georgia Institute of Technology", "Georgia Tech", "Georgia State University",
 ]
+
+# Las alertas llevan el membrete de quien firma ("Carrera 9 # 16-21, Bogota D.C.", la Defensoria) y
+# la direccion de a quien van ("Carrera 8 No 12B-31 Bogota D.C", la CIPRAT). Son remitente y
+# destinatario, no un territorio del que se hable. El filtro de plantillas no las atrapa porque el
+# OCR las escribe distinto en cada documento, asi que se quitan antes de buscar.
+ADDRESS = re.compile(
+    r"(?:Carrera|Calle|Avenida|Av\.)\s*\d+[A-Z]?\W{0,6}(?:No\.?|N°|#)?\s*\d+[A-Z]?\s*-\s*\d+"
+    r"\W{0,6}Bogot[aá]\s*,?\s*D\.?\s*C\.?"
+)
 
 # "Meta" es la palabra inglesa y la empresa; "Cordoba" y "Guainia" tambien son ciudades de otro
 # pais. Estos departamentos solo cuentan cuando el texto los nombra como departamento.
 AMBIGUOUS_DEPARTMENTS = {"CO-MET", "CO-COR", "CO-GUA", "CO-SUC", "CO-CAS", "CO-BOL", "CO-ATL"}
+
+# Natural Earth le pone a Bogota el codigo de Cundinamarca (CO-CUN). Son dos entidades territoriales
+# distintas: sin corregirlo, cada mencion de Bogota contaba para Cundinamarca y una geometria
+# pisaba a la otra. CO-DC es su codigo ISO 3166-2.
+CAPITAL = {"code": "CO-DC", "name": "Bogotá D.C.", "forms": ["Bogotá", "Bogota", "Distrito Capital"]}
 
 
 def country_forms() -> tuple[dict[str, str], dict[str, dict]]:
@@ -65,6 +87,7 @@ def country_forms() -> tuple[dict[str, str], dict[str, dict]]:
         for name in filter(None, names):
             forms[name] = code
         places[code] = {
+            "forms": sorted(filter(None, names)),
             "name": props.get("NAME_ES") or props["NAME"],
             # Natural Earth deja ISO_A2 vacio en los territorios disputados; ISO_A2_EH si lo trae.
             "iso2": props.get("ISO_A2_EH") or props.get("ISO_A2"),
@@ -87,15 +110,21 @@ def department_forms() -> tuple[dict[str, str], dict[str, dict]]:
         if not label:
             continue  # Natural Earth trae islotes sin nombre, que no son un departamento
         names = {props.get("name"), props.get("name_es"), props.get("name_alt")}
+        if props.get("name") == "Bogota":
+            code, label = CAPITAL["code"], CAPITAL["name"]
+            names |= set(CAPITAL["forms"])
+        spelled: list[str] = []
         for name in filter(None, names):
             if code in AMBIGUOUS_DEPARTMENTS:
                 # Solo cuenta nombrado como departamento: "Meta" o "Cordoba" a secas es otra cosa.
-                forms[f"departamento del {name}"] = code
-                forms[f"departamento de {name}"] = code
-                forms[f"{name} department"] = code
+                variants = [f"departamento del {name}", f"departamento de {name}", f"{name} department"]
             else:
-                forms[name] = code
+                variants = [name]
+            for variant in variants:
+                forms[variant] = code
+            spelled += variants
         places[code] = {
+            "forms": sorted(spelled),
             "name": label,
             "iso2": "CO",  # los departamentos son todos de Colombia
             "lon": props.get("longitude"),
@@ -119,18 +148,18 @@ async def main() -> None:
         ("department", department_forms()),
     ):
         await connection.executemany(
-            "insert into places (place_id, name, level, iso2, lon, lat, geometry) "
-            "values ($1,$2,$3,$4,$5,$6,$7)",
+            "insert into places (place_id, name, level, iso2, lon, lat, geometry, forms) "
+            "values ($1,$2,$3,$4,$5,$6,$7,$8)",
             [
                 (code, place["name"], level, place["iso2"], place["lon"], place["lat"],
-                 json.dumps(place["geometry"]))
+                 json.dumps(place["geometry"]), place["forms"])
                 for code, place in places.items()
             ],
         )
         pattern = matching.build(forms, DECOYS)
         per_chunk = []
         for row in rows:
-            found = list(matching.find(row["text"], pattern, forms))
+            found = list(matching.find(ADDRESS.sub(" ", row["text"]), pattern, forms))
             if found:
                 per_chunk.append((row["doc_id"], row["chunk_id"], row["phenomenon"], found))
         mentions, templates = matching.drop_templates(per_chunk)
