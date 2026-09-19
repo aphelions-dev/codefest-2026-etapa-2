@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { ChatPanel, type Turn } from "@/components/chat/panel";
 import { DocumentView } from "@/components/document-view";
-import { AgentUnavailable, ask } from "@/lib/agent";
+import { AgentUnavailable, askStream, type Progress } from "@/lib/agent";
 
 /**
  * El chat a secas, sin tablero: es el frontend que permite interactuar manualmente con el agente
@@ -14,11 +14,18 @@ import { AgentUnavailable, ask } from "@/lib/agent";
 export function Chat() {
   const [turns, setTurns] = useState<readonly Turn[]>([]);
   const [pending, setPending] = useState(false);
+  const [live, setLive] = useState<readonly Progress[]>([]);
+  const [visualized, setVisualized] = useState<number | null>(null);
 
   const onAsk = async (question: string) => {
     setPending(true);
+    setLive([]);
+    setVisualized(null);
     try {
-      const result = await ask(question);
+      const result = await askStream(question, {
+        onStep: (step) => setLive((previous) => [...previous, step]),
+        onVisualization: (chosen) => setVisualized(chosen.length),
+      });
       setTurns((previous) => [...previous, { question, ...result }]);
     } catch (error) {
       const message = error instanceof AgentUnavailable ? error.message : "El agente falló.";
@@ -32,8 +39,10 @@ export function Chat() {
     <main className="mx-auto h-dvh w-full max-w-3xl border-x border-border/60">
       <ChatPanel
         onAsk={onAsk}
+        live={live}
         pending={pending}
         standalone
+        visualized={visualized}
         subtitle="Asistente del Radar Estratégico · cada afirmación con su fuente del corpus"
         turns={turns}
       />

@@ -6,7 +6,9 @@ import {
   BrainIcon,
   ChevronDownIcon,
   CircleAlertIcon,
+  ChartColumnIcon,
   CircleCheckIcon,
+  LoaderCircleIcon,
   type LucideIcon,
   RouteIcon,
   ShieldCheckIcon,
@@ -17,7 +19,7 @@ import { useState } from "react";
 import { DocumentLink } from "@/components/document-view";
 import { chunkLabel } from "@/components/highlight";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import type { AgentRun, Cost, Source, ToolRun } from "@/lib/agent";
+import type { AgentRun, Cost, Progress, Source, ToolRun } from "@/lib/agent";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +30,7 @@ const AGENTS: Record<string, { readonly name: string; readonly role: string; rea
   rag_analyst: { name: "Analista del corpus", role: "Busca en el índice y redacta citando cada afirmación", icon: BookOpenTextIcon },
   verifier: { name: "Verificador", role: "Comprueba que cada cita exista y que la respuesta sea fiel", icon: BadgeCheckIcon },
   output_guardrail: { name: "Guardián de salida", role: "Última revisión antes de responder", icon: ShieldHalfIcon },
+  visualizer: { name: "Visualizador", role: "Elige los componentes del tablero que responden la pregunta", icon: ChartColumnIcon },
 };
 
 /** Cada herramienta en una o dos palabras: la traza se escanea, no se lee. */
@@ -43,6 +46,13 @@ const TOOL_LABEL: Record<string, string> = {
   detect_injection: "Fragmentos",
   analyze_response_toxicity: "Tono",
   detect_indirect_injection: "Inyección indirecta",
+  get_places: "Mapa",
+  get_timeline: "Línea de tiempo",
+  get_entity_matrix: "Matriz",
+  get_cooccurrence: "Red",
+  get_quadrant: "Cuadrante",
+  get_metadata_breakdown: "Barras",
+  get_distribution: "Histograma",
 };
 
 // Salidas que dicen que la comprobación no pasó: se marcan en ámbar en vez de con un visto.
@@ -55,6 +65,8 @@ function outcome(tool: ToolRun): string {
   if (tool.name === "route_intent") return tool.output === "corpus" ? "corpus" : "directa";
   if (tool.name === "filter_input") return tool.output === tool.input.message ? "sin cambios" : "saneada";
   if (tool.name === "decompose_query") return `«${tool.output}»`;
+  if (tool.output.startsWith("componente activado")) return "activado";
+  if (tool.output.startsWith("encabezan: ")) return tool.output.slice("encabezan: ".length);
   if (tool.name === "extract_fragments") return `${String(tool.input.threshold ?? "")} → ${tool.output.split(" ")[0]}`;
   if (tool.name === "search_corpus") return tool.output.replace(" fragmentos de ", " de ").replace(" documentos", " docs");
   return tool.output.replace(/^las (\d+) citas existen$/, "$1 ✓");
@@ -233,34 +245,103 @@ export function AgentStatus({ status }: { readonly status: string }) {
   );
 }
 
+/** Los pasos del grafo en el orden en que corren, como los emite `POST /chat/stream`. */
+const STAGES: readonly { readonly node: string; readonly label: string; readonly icon: LucideIcon }[] = [
+  { node: "input_guardrail", label: "Guardián de entrada", icon: ShieldCheckIcon },
+  { node: "orchestrator", label: "Orquestador", icon: RouteIcon },
+  { node: "retrieve", label: "Búsqueda en el corpus", icon: BookOpenTextIcon },
+  { node: "write", label: "Redacción con citas", icon: BookOpenTextIcon },
+  { node: "verify", label: "Verificación", icon: BadgeCheckIcon },
+  { node: "output_guardrail", label: "Guardián de salida", icon: ShieldHalfIcon },
+];
+
 /**
- * Mientras el agente trabaja. No hay streaming, así que no se finge en qué paso va: se enseña la
- * cadena que va a recorrer, con un pulso que dice que está en marcha.
+ * Mientras el agente trabaja, lo que de verdad está pasando: cada agente se marca en cuanto el
+ * backend dice que terminó, con lo que devolvieron sus herramientas, y el siguiente queda en curso.
+ * El visualizador corre en paralelo y tiene su propia fila. Nada se simula: sin evento no hay avance.
  */
-export function AgentPending() {
+export function AgentLive({
+  steps,
+  visualized,
+}: {
+  readonly steps: readonly Progress[];
+  /** Cuántos componentes eligió el visualizador, o `null` si todavía no ha terminado. */
+  readonly visualized: number | null;
+}) {
+  const done = new Map(steps.map((step) => [step.node, step]));
+  const retries = steps.filter((step) => step.node === "rewrite").length;
+  const current = STAGES.findIndex((stage) => !done.has(stage.node));
+
   return (
-    <div className="border-border/60 bg-card/40 space-y-2 rounded-lg border px-2.5 py-2" role="status">
+    <div aria-live="polite" className="border-border/60 bg-card/40 space-y-1.5 rounded-lg border px-2.5 py-2" role="status">
       <div className="flex items-center gap-2 text-[12px]">
         <span className="relative flex size-2">
           <span className="bg-primary absolute inline-flex size-full animate-ping rounded-full opacity-60" />
           <span className="bg-primary relative inline-flex size-2 rounded-full" />
         </span>
-        Los agentes están trabajando…
+        Razonando en vivo
+        {retries > 0 ? <span className="text-f3 text-[10px]">· reintento {retries}</span> : null}
       </div>
-      <ol className="text-muted-foreground flex flex-wrap items-center gap-1 text-[10px]">
-        {Object.entries(AGENTS).map(([id, meta], index) => {
-          const Icon = meta.icon;
+      <ol className="space-y-1">
+        {STAGES.map((stage, index) => {
+          const step = done.get(stage.node);
+          const state = step ? "done" : index === current ? "active" : "pending";
           return (
-            <li className="flex items-center gap-1" key={id}>
-              {index > 0 ? <span aria-hidden>→</span> : null}
-              <span className="border-border/60 flex items-center gap-1 rounded-full border px-1.5 py-0.5">
-                <Icon className="size-3" />
-                {meta.name}
-              </span>
-            </li>
+            <LiveRow
+              icon={stage.icon}
+              key={stage.node}
+              label={stage.label}
+              state={state}
+              tools={step?.tools ?? []}
+            />
           );
         })}
+        <LiveRow
+          detail={visualized === null ? "en paralelo" : visualized === 0 ? "sin componentes" : `${visualized} componente${visualized === 1 ? "" : "s"}`}
+          icon={ChartColumnIcon}
+          label="Visualizador"
+          state={visualized === null ? "active" : "done"}
+          tools={[]}
+        />
       </ol>
     </div>
+  );
+}
+
+function LiveRow({
+  label,
+  icon: Icon,
+  state,
+  tools,
+  detail,
+}: {
+  readonly label: string;
+  readonly icon: LucideIcon;
+  readonly state: "done" | "active" | "pending";
+  readonly tools: readonly ToolRun[];
+  readonly detail?: string;
+}) {
+  return (
+    <li
+      className={cn(
+        "flex items-center gap-2 text-[11px] transition-opacity duration-300",
+        state === "pending" && "opacity-40",
+      )}
+    >
+      {state === "done" ? (
+        <CircleCheckIcon className="size-3.5 shrink-0 text-emerald-400/80" />
+      ) : state === "active" ? (
+        <LoaderCircleIcon className="text-primary size-3.5 shrink-0 animate-spin" />
+      ) : (
+        <Icon className="text-muted-foreground size-3.5 shrink-0" />
+      )}
+      <span className={cn("shrink-0", state === "active" ? "text-foreground" : "text-muted-foreground")}>{label}</span>
+      {detail ? <span className="text-muted-foreground truncate text-[10px]">· {detail}</span> : null}
+      {tools.length > 0 ? (
+        <span className="text-muted-foreground min-w-0 truncate text-[10px]">
+          · {tools.map((tool) => `${TOOL_LABEL[tool.name] ?? tool.name} ${outcome(tool)}`).join(" · ")}
+        </span>
+      ) : null}
+    </li>
   );
 }

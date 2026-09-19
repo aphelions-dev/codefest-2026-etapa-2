@@ -18,6 +18,9 @@ import { Bars } from "@/components/charts/bars";
 import { Evidence } from "@/components/charts/evidence";
 import { Graph } from "@/components/charts/graph";
 import { Heatmap } from "@/components/charts/heatmap";
+import { PlacesChart } from "@/components/charts/places-chart";
+import { YearsChart } from "@/components/charts/years-chart";
+import type { Period } from "@/lib/period";
 import { Histogram } from "@/components/charts/histogram";
 import { Quadrant } from "@/components/charts/quadrant";
 
@@ -45,6 +48,8 @@ export type ToolName =
 export type Activation = {
   readonly tool: ToolName;
   readonly filters?: Record<string, string | number | undefined>;
+  /** La eligió el agente de visualizaciones: el chat la dibuja dentro de la respuesta. */
+  readonly byAgent?: boolean;
 };
 
 type Context = {
@@ -70,35 +75,57 @@ export const TOOLS: Record<ToolName, { readonly label: string; readonly task: st
   search_corpus: { label: "Evidencia", task: "verificación de la fuente", icon: SearchIcon },
 };
 
-export function render(activation: Activation, context: Context): ReactNode {
+/** El periodo que declaró el agente, o `undefined` para que cada gráfica lea el de la URL. */
+function periodOf(filters: Record<string, string | number | undefined>): Period | undefined {
+  const from = filters.date_from as string | undefined;
+  const to = filters.date_to as string | undefined;
+  return from || to ? { from: from ?? null, to: to ?? null } : undefined;
+}
+
+/**
+ * `inline` es la respuesta del chat: ahí el mapa y la línea de tiempo no son el lienzo ni la franja,
+ * así que se dibujan como gráficas propias con los mismos datos.
+ */
+export function render(activation: Activation, context: Context, inline = false): ReactNode {
   const { tool, filters = {} } = activation;
   const phenomenon = (filters.phenomenon as number | undefined) ?? context.phenomenon;
   const { entity, onEntity } = context;
+  const period = periodOf(filters);
 
   switch (tool) {
     case "get_metadata_breakdown":
-      return <Bars by={String(filters.by ?? "observatory")} phenomenon={phenomenon} />;
+      return <Bars by={String(filters.by ?? "observatory")} period={period} phenomenon={phenomenon} />;
     case "get_distribution":
-      return <Histogram measure={filters.measure as string | undefined} phenomenon={phenomenon} />;
+      return <Histogram measure={filters.measure as string | undefined} period={period} phenomenon={phenomenon} />;
     case "get_entity_matrix":
       return (
         <Heatmap
           cols={String(filters.cols ?? "observatory")}
           entity={entity}
           onEntity={onEntity}
+          period={period}
           phenomenon={phenomenon}
         />
       );
     case "get_cooccurrence":
-      return <Graph entity={entity} onEntity={onEntity} phenomenon={phenomenon} />;
+      return <Graph entity={entity} onEntity={onEntity} period={period} phenomenon={phenomenon} />;
     case "get_quadrant":
       return <Quadrant entity={entity} onEntity={onEntity} phenomenon={phenomenon} />;
     case "get_places":
-      // El mapa es el lienzo, no un panel: activarlo mueve el radar de fondo, no abre una tarjeta.
-      return null;
+      // En el tablero el mapa es el lienzo: activarlo mueve el radar de fondo, no abre una tarjeta.
+      return inline ? (
+        <PlacesChart
+          level={String(filters.level ?? "country")}
+          period={period ?? { from: null, to: null }}
+          phenomenon={phenomenon}
+          view={String(filters.view ?? "documentos")}
+        />
+      ) : null;
     case "get_timeline":
-      // La serie temporal es la franja inferior, no una tarjeta: necesita anchura para leerse.
-      return null;
+      // En el tablero la serie temporal es la franja inferior: necesita anchura para leerse.
+      return inline ? (
+        <YearsChart entity={(filters.entity as string | undefined) ?? entity ?? undefined} phenomenon={phenomenon} />
+      ) : null;
     case "get_document":
     case "search_corpus":
       return (

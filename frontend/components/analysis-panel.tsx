@@ -30,6 +30,7 @@ export function AnalysisPanel({
   entityNote,
   open,
   onOpenChange,
+  focus = null,
   leftInset,
   rightInset,
   bottomInset,
@@ -43,6 +44,8 @@ export function AnalysisPanel({
   readonly entityNote?: string;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
+  /** El componente que abrir: el que eligió el agente o el que se pidió desde el chat. */
+  readonly focus?: Activation["tool"] | null;
   /** Lo que ocupan la barra, el analista y la franja temporal: la píldora va en el hueco. */
   readonly leftInset: number;
   readonly rightInset: number;
@@ -53,8 +56,9 @@ export function AnalysisPanel({
   const [chosen, setChosen] = useState<{ readonly key: string; readonly index: number } | null>(null);
   const [period] = usePeriod();
 
-  const key = activations.map((activation) => activation.tool).join(",");
-  const active = chosen?.key === key ? chosen.index : 0;
+  const key = `${activations.map((activation) => activation.tool).join(",")}|${focus ?? ""}`;
+  const focused = Math.max(0, activations.findIndex((activation) => activation.tool === focus));
+  const active = chosen?.key === key ? chosen.index : focused;
   const setActive = (index: number) => setChosen({ key, index });
 
   if (activations.length === 0) return null;

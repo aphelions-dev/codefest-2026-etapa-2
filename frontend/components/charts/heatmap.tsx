@@ -3,7 +3,7 @@
 import { Panel, PanelState } from "@/components/charts/panel";
 import { useDocument } from "@/lib/use-document";
 import type { Matrix } from "@/lib/api";
-import { periodParams, usePeriod } from "@/lib/period";
+import { type Period, periodParams, usePeriod } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
 
 /** Escala secuencial para una variable numérica ordenada, sobre el fondo del tablero. */
@@ -27,13 +27,17 @@ export function Heatmap({
   phenomenon,
   entity,
   onEntity,
+  period: own,
 }: {
   readonly cols: string;
   readonly phenomenon: number | null;
   readonly entity: string | null;
   readonly onEntity: (entityId: string | null) => void;
+  /** El periodo que declaró el agente; sin él, el filtro global de la URL. */
+  readonly period?: Period;
 }) {
-  const [period] = usePeriod();
+  const [global] = usePeriod();
+  const period = own ?? global;
   const { data, error, loading } = useApi<Matrix>("/entities/matrix", {
     cols,
     phenomenon: phenomenon ?? undefined,

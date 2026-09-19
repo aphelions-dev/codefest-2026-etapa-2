@@ -13,13 +13,14 @@ import {
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion } from "@/components/ai-elements/suggestion";
-import { AgentPending, AgentStatus, AgentTrace, AnswerSources } from "@/components/agent-trace";
+import { AgentLive, AgentStatus, AgentTrace, AnswerSources } from "@/components/agent-trace";
+import { AnswerCharts } from "@/components/chat/answer-charts";
 import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
 import { type Activation, TOOLS } from "@/components/registry";
 import { DocumentLink } from "@/components/document-view";
 import { SurfaceLink } from "@/components/surface-link";
-import { type AgentRun, type Cost, linkCitations, parseCitation, type Source } from "@/lib/agent";
+import { type AgentRun, type Cost, linkCitations, parseCitation, type Progress, type Source } from "@/lib/agent";
 import { cn } from "@/lib/utils";
 import type { ComponentProps } from "react";
 
@@ -79,6 +80,9 @@ export function ChatPanel({
   onToggle,
   subtitle = "Pregunta y el radar se reorganiza",
   standalone = false,
+  live = [],
+  visualized = null,
+  onOpenComponent,
 }: {
   readonly turns: readonly Turn[];
   readonly pending: boolean;
@@ -89,6 +93,12 @@ export function ChatPanel({
   readonly subtitle?: string;
   /** A solas no hay tablero: los componentes que activó la respuesta no se enseñan. */
   readonly standalone?: boolean;
+  /** Los agentes que ya terminaron en la pregunta en curso, en vivo. */
+  readonly live?: readonly Progress[];
+  /** Cuántos componentes eligió ya el visualizador en la pregunta en curso. */
+  readonly visualized?: number | null;
+  /** En el tablero, abrir un componente de la respuesta en el diálogo grande. */
+  readonly onOpenComponent?: (tool: Activation["tool"]) => void;
 }) {
   // Plegado, todo el riel abre el analista: no hace falta atinar al icono.
   if (collapsed) {
@@ -154,11 +164,18 @@ export function ChatPanel({
             </div>
           ) : (
             turns.map((turn, index) => (
-              <TurnView key={index} onAsk={onAsk} pending={pending} standalone={standalone} turn={turn} />
+              <TurnView
+                key={index}
+                onAsk={onAsk}
+                onOpenComponent={onOpenComponent}
+                pending={pending}
+                standalone={standalone}
+                turn={turn}
+              />
             ))
           )}
-          {/* Mientras trabajan: la cadena de agentes que va a recorrer la pregunta. */}
-          {pending ? <AgentPending /> : null}
+          {/* Mientras trabajan: cada agente se marca en cuanto el backend dice que terminó. */}
+          {pending ? <AgentLive steps={live} visualized={visualized} /> : null}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
@@ -191,12 +208,15 @@ function TurnView({
   pending,
   standalone,
   onAsk,
+  onOpenComponent,
 }: {
   readonly turn: Turn;
   readonly pending: boolean;
   readonly standalone: boolean;
   readonly onAsk: (question: string) => void;
+  readonly onOpenComponent?: (tool: Activation["tool"]) => void;
 }) {
+  const charts = turn.activations.filter((activation) => activation.byAgent);
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     await navigator.clipboard.writeText(turn.answer ?? "");
@@ -224,11 +244,13 @@ function TurnView({
       </Message>
 
       {turn.status ? <AgentStatus status={turn.status} /> : null}
+      {/* Lo que eligió el visualizador, dibujado aquí mismo: la respuesta también es gráfica. */}
+      {charts.length > 0 ? <AnswerCharts activations={charts} onOpen={standalone ? undefined : onOpenComponent} /> : null}
       {turn.sources ? <AnswerSources sources={turn.sources} /> : null}
       {turn.agents && turn.cost ? <AgentTrace agents={turn.agents} cost={turn.cost} /> : null}
 
       <div className="flex flex-wrap items-center gap-1">
-        {!standalone && turn.activations.length > 0 ? (
+        {!standalone && charts.length === 0 && turn.activations.length > 0 ? (
           <ul aria-label="Componentes que activó" className="text-muted-foreground flex flex-wrap gap-1 text-[10px]">
             {turn.activations.map((activation) => {
               const Icon = TOOLS[activation.tool].icon;

@@ -93,6 +93,14 @@ const TOOL_AGENT: Record<string, string> = {
   detect_injection: "verifier",
   analyze_response_toxicity: "output_guardrail",
   detect_indirect_injection: "output_guardrail",
+  // El visualizador: cada herramienta es un componente del tablero (§3.3).
+  get_places: "visualizer",
+  get_timeline: "visualizer",
+  get_entity_matrix: "visualizer",
+  get_cooccurrence: "visualizer",
+  get_quadrant: "visualizer",
+  get_metadata_breakdown: "visualizer",
+  get_distribution: "visualizer",
 };
 
 /**
@@ -123,12 +131,90 @@ function isTool(name: string): name is ToolName {
 
 /** Pregunta al agente y traduce su respuesta a agentes, fuentes, componentes y coste. */
 export async function ask(question: string): Promise<Answer> {
+  const response = await post("/chat", { input: question });
+  return interpret((await response.json()) as AgentResponse);
+}
+
+/** Un agente que acaba de terminar, tal como lo emite `POST /chat/stream`. */
+export type Progress = {
+  readonly node: string;
+  readonly agents: readonly string[];
+  readonly tools: readonly ToolRun[];
+  readonly tokens: readonly { readonly agente: string; readonly modelo: string; readonly total: number }[];
+};
+
+/**
+ * La misma pregunta, en vivo: `onStep` recibe cada agente en cuanto termina y `onVisualization`
+ * los componentes que eligió el visualizador, que corre en paralelo. Devuelve la respuesta final,
+ * con el mismo contrato que `ask`.
+ */
+export async function askStream(
+  question: string,
+  handlers: {
+    readonly onStep?: (step: Progress) => void;
+    readonly onVisualization?: (activations: readonly Activation[]) => void;
+  } = {},
+): Promise<Answer> {
+  const response = await post("/chat/stream", { input: question });
+  if (!response.body) throw new AgentUnavailable("El agente no devolvió el progreso de la respuesta.");
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  let result: AgentResponse | null = null;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    // Un evento SSE termina en una línea vacía; lo que queda después es el principio del siguiente.
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? "";
+    for (const raw of events) {
+      const name = /^event: (.+)$/m.exec(raw)?.[1];
+      const data = /^data: (.+)$/m.exec(raw)?.[1];
+      if (!name || !data) continue;
+      const payload: unknown = JSON.parse(data);
+      if (name === "step") {
+        const step = payload as Omit<Progress, "tools"> & { tools: readonly ApiTool[] };
+        handlers.onStep?.({ ...step, tools: step.tools.map(toolRun) });
+      } else if (name === "visualization") {
+        handlers.onVisualization?.(visualizations((payload as { tools: readonly ApiTool[] }).tools));
+      } else if (name === "result") {
+        result = payload as AgentResponse;
+      }
+    }
+  }
+  if (!result) throw new AgentUnavailable("La respuesta del agente se cortó antes de terminar.");
+  return interpret(result);
+}
+
+type ApiTool = { readonly name: string; readonly input_parameters?: Record<string, unknown>; readonly output?: unknown };
+
+function toolRun(call: ApiTool): ToolRun {
+  return {
+    name: call.name,
+    input: call.input_parameters ?? {},
+    output: typeof call.output === "string" ? call.output : JSON.stringify(call.output ?? ""),
+  };
+}
+
+/** Los componentes que eligió el visualizador, con sus filtros tal como los declaró. */
+function visualizations(calls: readonly ApiTool[]): Activation[] {
+  return calls
+    .filter((call) => TOOL_AGENT[call.name] === "visualizer" && isTool(call.name))
+    .map((call) => ({
+      tool: call.name as ToolName,
+      filters: { ...(call.input_parameters ?? {}) } as Record<string, string | number | undefined>,
+      byAgent: true,
+    }));
+}
+
+async function post(path: string, body: Record<string, unknown>): Promise<Response> {
   let response: Response;
   try {
-    response = await fetch(new URL("/chat", API_URL), {
+    response = await fetch(new URL(path, API_URL), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ input: question }),
+      body: JSON.stringify(body),
     });
   } catch {
     throw new AgentUnavailable("No se pudo contactar con el agente. Revisa la conexión e inténtalo de nuevo.");
@@ -139,8 +225,11 @@ export async function ask(question: string): Promise<Answer> {
     );
   }
   if (!response.ok) throw new AgentUnavailable(`El agente respondió con un error (${response.status}).`);
+  return response;
+}
 
-  const body = (await response.json()) as AgentResponse;
+/** Traduce la respuesta del contrato a lo que enseñan el chat y el tablero. */
+function interpret(body: AgentResponse): Answer {
   const calls = body.evaluacion?.tools_called ?? [];
   const cited = new Set((body.respuesta.match(DOC_ID) ?? []).map(canonical));
 
@@ -186,7 +275,7 @@ export async function ask(question: string): Promise<Answer> {
       const first = sources.find((source) => source.cited);
       if (first) Object.assign(filters, { doc_id: first.docId, chunk_id: first.chunkId });
     }
-    activations.push({ tool: call.name, filters });
+    activations.push({ tool: call.name, filters, byAgent: TOOL_AGENT[call.name] === "visualizer" });
   }
 
   return {

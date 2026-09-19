@@ -10,7 +10,7 @@ import { quantileBreaks } from "@/components/map/layers";
 import type { Activation } from "@/components/registry";
 import { SIDEBAR_OPEN, SIDEBAR_RAIL, Sidebar } from "@/components/sidebar";
 import { TimelineStrip } from "@/components/timeline-strip";
-import { AgentUnavailable, ask } from "@/lib/agent";
+import { AgentUnavailable, askStream, type Progress } from "@/lib/agent";
 import { rankOf } from "@/lib/format";
 import { useEntity, useMapLevel, usePhenomenon } from "@/lib/filters";
 import { isActive, periodLabel, usePeriod } from "@/lib/period";
@@ -53,9 +53,14 @@ export function Dashboard() {
   const [entity, setEntity] = useEntity();
   const [view, setView] = useMapView();
   const [filter, setFilter] = useLayerFilter();
-  const [period] = usePeriod();
+  const [period, setPeriod] = usePeriod();
   const [turns, setTurns] = useState<readonly Turn[]>([]);
   const [pending, setPending] = useState(false);
+  // La pregunta en curso, en vivo: los agentes que ya terminaron y lo que eligió el visualizador.
+  const [live, setLive] = useState<readonly Progress[]>([]);
+  const [visualized, setVisualized] = useState<number | null>(null);
+  // El componente que se pidió abrir desde la respuesta del chat.
+  const [focus, setFocus] = useState<Activation["tool"] | null>(null);
   const [activations, setActivations] = useState<readonly Activation[]>(DEFAULT_VIEW);
   // Lo elegido va atado al conjunto de territorios en que se eligió: cambiar de nivel, fenómeno,
   // entidad, capa o filtro cambia ese conjunto, y lo elegido deja de existir.
@@ -156,15 +161,59 @@ export function Dashboard() {
   const rankOfPlace = (place: MapDatum | null) =>
     place && layer.data.some((datum) => datum.id === place.id) ? rankOf(place.value, values) : null;
 
+  /**
+   * Lo que eligió el visualizador, aplicado al tablero en cuanto llega —antes que la respuesta en
+   * texto—. El mapa y la línea de tiempo son el lienzo y la franja: sus filtros mueven el radar.
+   * El resto reemplaza los componentes del diálogo: el tablero no muestra todo a la vez.
+   */
+  const applyVisualizations = (chosen: readonly Activation[]) => {
+    const map = chosen.find((activation) => activation.tool === "get_places");
+    if (map) {
+      const filters = map.filters ?? {};
+      const layer = (filters.view as MapView | undefined) ?? "documentos";
+      onView(layer);
+      if (layer === "documentos") {
+        if (filters.level === "country" || filters.level === "department") setLevel(filters.level);
+        setPhenomenon((filters.phenomenon as number | undefined) ?? null);
+      }
+    }
+    const dated = chosen.find((activation) => activation.filters?.date_from || activation.filters?.date_to);
+    if (dated) {
+      setPeriod({
+        from: (dated.filters?.date_from as string | undefined) ?? null,
+        to: (dated.filters?.date_to as string | undefined) ?? null,
+      });
+    }
+    const panels = chosen.filter((activation) => !OUT_OF_COLUMN.has(activation.tool));
+    if (panels.length > 0) {
+      setActivations(panels);
+      setFocus(panels[0].tool);
+      setAnalysisOpen(true);
+    } else if (map) {
+      // Solo el mapa: se cierra el diálogo para que el radar se vea.
+      setAnalysisOpen(false);
+    }
+  };
+
   const onAsk = async (question: string) => {
     setPending(true);
+    setLive([]);
+    setVisualized(null);
+    let visualizedHere = false;
     try {
-      const result = await ask(question);
-      const chosen = result.activations;
+      const result = await askStream(question, {
+        onStep: (step) => setLive((previous) => [...previous, step]),
+        onVisualization: (chosen) => {
+          visualizedHere = true;
+          setVisualized(chosen.length);
+          applyVisualizations(chosen);
+        },
+      });
       setTurns((previous) => [...previous, { question, ...result }]);
-      // Lo que el agente activó reemplaza la vista: el tablero no muestra todo a la vez.
-      if (chosen.length > 0) {
-        setActivations(chosen);
+      // Sin visualizaciones, la evidencia que citó la respuesta ocupa el diálogo.
+      const evidence = result.activations.filter((activation) => !activation.byAgent);
+      if (!visualizedHere && evidence.length > 0) {
+        setActivations(evidence);
         setAnalysisOpen(true);
       }
     } catch (error) {
@@ -205,6 +254,7 @@ export function Dashboard() {
         entityNote={layer.entityApplies ? undefined : "no alcanza al mapa"}
         leftInset={sidebarWidth}
         onEntity={setEntity}
+        focus={focus}
         onOpenChange={setAnalysisOpen}
         open={analysisOpen}
         phenomenon={phenomenon}
@@ -254,9 +304,17 @@ export function Dashboard() {
       >
         <ChatPanel
           collapsed={!chatOpen}
+          live={live}
           onAsk={onAsk}
+          onOpenComponent={(tool) => {
+            // El mapa y la línea de tiempo ya están en el lienzo: basta con despejarlo.
+            if (OUT_OF_COLUMN.has(tool)) return setAnalysisOpen(false);
+            setFocus(tool);
+            setAnalysisOpen(true);
+          }}
           onToggle={() => setChatChoice(!chatOpen)}
           pending={pending}
+          visualized={visualized}
           turns={turns}
         />
       </div>

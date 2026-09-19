@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Panel, PanelState } from "@/components/charts/panel";
 import type { Graph as GraphData } from "@/lib/api";
-import { periodParams, usePeriod } from "@/lib/period";
+import { type Period, periodParams, usePeriod } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
 import { useDocument } from "@/lib/use-document";
 
@@ -56,12 +56,16 @@ export function Graph({
   phenomenon,
   entity,
   onEntity,
+  period: own,
 }: {
   readonly phenomenon: number | null;
   readonly entity: string | null;
   readonly onEntity: (entityId: string | null) => void;
+  /** El periodo que declaró el agente; sin él, el filtro global de la URL. */
+  readonly period?: Period;
 }) {
-  const [period] = usePeriod();
+  const [global] = usePeriod();
+  const period = own ?? global;
   const { data, error, loading } = useApi<GraphData>("/entities/cooccurrence", {
     phenomenon: phenomenon ?? undefined,
     ...periodParams(period),

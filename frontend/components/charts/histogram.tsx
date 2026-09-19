@@ -7,7 +7,7 @@ import { Panel, PanelState } from "@/components/charts/panel";
 import type { Distribution } from "@/lib/api";
 import { PHENOMENA, phenomenonColor } from "@/lib/filters";
 import { formatNumber } from "@/lib/format";
-import { periodParams, usePeriod } from "@/lib/period";
+import { type Period, periodParams, usePeriod } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
 import { useDocument } from "@/lib/use-document";
 import { cn } from "@/lib/utils";
@@ -28,9 +28,19 @@ type Measure = keyof typeof MEASURES;
  *
  * Una barra abre el documento con el valor más alto de su tramo, que es su evidencia.
  */
-export function Histogram({ measure: initial, phenomenon }: { readonly measure?: string; readonly phenomenon: number | null }) {
+export function Histogram({
+  measure: initial,
+  phenomenon,
+  period: own,
+}: {
+  readonly measure?: string;
+  readonly phenomenon: number | null;
+  /** El periodo que declaró el agente; sin él, el filtro global de la URL. */
+  readonly period?: Period;
+}) {
   const [measure, setMeasure] = useState<Measure>(initial === "entities" ? "entities" : "fragments");
-  const [period] = usePeriod();
+  const [global] = usePeriod();
+  const period = own ?? global;
   const { data, error, loading } = useApi<Distribution>("/metadata/distribution", {
     measure,
     phenomenon: phenomenon ?? undefined,
