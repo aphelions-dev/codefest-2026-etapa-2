@@ -33,6 +33,29 @@ COUNTRIES = {
 }
 
 
+# Decimales de las coordenadas: 4 son unos 11 metros, muy por debajo de lo que el mapa distingue al
+# zoom de un municipio. geoBoundaries publica 15, y con ellos la capa pasa de 13 MB.
+PRECISION = 4
+
+
+def compact(geometry: dict) -> dict:
+    """La geometria con las coordenadas redondeadas y sin los vertices que el redondeo repite."""
+
+    def ring(points: list) -> list:
+        out: list = []
+        for x, y in points:
+            point = [round(x, PRECISION), round(y, PRECISION)]
+            if not out or out[-1] != point:
+                out.append(point)
+        return out
+
+    if geometry["type"] == "Polygon":
+        coordinates = [ring(r) for r in geometry["coordinates"]]
+    else:
+        coordinates = [[ring(r) for r in polygon] for polygon in geometry["coordinates"]]
+    return {"type": geometry["type"], "coordinates": coordinates}
+
+
 def fold(text: str) -> str:
     """Sin acentos y en minuscula: las dos fuentes escriben los nombres de maneras distintas."""
     stripped = unicodedata.normalize("NFKD", text or "")
@@ -147,7 +170,7 @@ async def main() -> None:
 
     await connection.executemany(
         "update armed_presence set geometry = $2 where pcode = $1",
-        [(pcode, json.dumps(data["geometry"])) for pcode, data in matched.items()],
+        [(pcode, json.dumps(compact(data["geometry"]))) for pcode, data in matched.items()],
     )
 
     total = await connection.fetchval("select count(*) from armed_presence")

@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import asyncpg
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from pgvector.asyncpg import register_vector
 
 from app.agent.graph import Runtime, build
@@ -71,6 +72,9 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
+# Las capas del mapa son GeoJSON: la presencia armada pasa de 13 MB con la geometria municipal
+# completa, y el texto de coordenadas comprime como pocas cosas.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 
 
 app.include_router(aggregate.router)
