@@ -66,6 +66,8 @@ def country_forms() -> tuple[dict[str, str], dict[str, dict]]:
             forms[name] = code
         places[code] = {
             "name": props.get("NAME_ES") or props["NAME"],
+            # Natural Earth deja ISO_A2 vacio en los territorios disputados; ISO_A2_EH si lo trae.
+            "iso2": props.get("ISO_A2_EH") or props.get("ISO_A2"),
             "lon": props.get("LABEL_X"),
             "lat": props.get("LABEL_Y"),
             "geometry": feature["geometry"],
@@ -95,6 +97,7 @@ def department_forms() -> tuple[dict[str, str], dict[str, dict]]:
                 forms[name] = code
         places[code] = {
             "name": label,
+            "iso2": "CO",  # los departamentos son todos de Colombia
             "lon": props.get("longitude"),
             "lat": props.get("latitude"),
             "geometry": feature["geometry"],
@@ -116,9 +119,11 @@ async def main() -> None:
         ("department", department_forms()),
     ):
         await connection.executemany(
-            "insert into places (place_id, name, level, lon, lat, geometry) values ($1,$2,$3,$4,$5,$6)",
+            "insert into places (place_id, name, level, iso2, lon, lat, geometry) "
+            "values ($1,$2,$3,$4,$5,$6,$7)",
             [
-                (code, place["name"], level, place["lon"], place["lat"], json.dumps(place["geometry"]))
+                (code, place["name"], level, place["iso2"], place["lon"], place["lat"],
+                 json.dumps(place["geometry"]))
                 for code, place in places.items()
             ],
         )

@@ -1,13 +1,25 @@
 "use client";
 
-import { DatabaseZapIcon, NetworkIcon, PenLineIcon, SearchIcon, ShieldCheckIcon, TableIcon } from "lucide-react";
+import {
+  DatabaseZapIcon,
+  GridIcon,
+  NetworkIcon,
+  PenLineIcon,
+  SearchIcon,
+  ShieldCheckIcon,
+  TableIcon,
+} from "lucide-react";
 
 import {
   ChainOfThought,
   ChainOfThoughtContent,
   ChainOfThoughtHeader,
+  ChainOfThoughtSearchResult,
+  ChainOfThoughtSearchResults,
   ChainOfThoughtStep,
 } from "@/components/ai-elements/chain-of-thought";
+import { DocumentLink } from "@/components/document-view";
+import { PHENOMENON_DOT } from "@/lib/filters";
 import { TOOLS, type ToolName } from "@/components/registry";
 import type { Step } from "@/lib/agent";
 import { cn } from "@/lib/utils";
@@ -17,6 +29,7 @@ const ICONS: Record<ToolName, typeof SearchIcon> = {
   get_metadata_breakdown: DatabaseZapIcon,
   get_entity_matrix: TableIcon,
   get_cooccurrence: NetworkIcon,
+  get_quadrant: GridIcon,
   get_places: DatabaseZapIcon,
   get_timeline: DatabaseZapIcon,
   get_document: ShieldCheckIcon,
@@ -47,9 +60,35 @@ export function AgentTrace({ steps, cost }: { readonly steps: readonly Step[]; r
               description={step.detail}
               icon={Icon}
               key={`${step.agent}-${index}`}
-              label={label}
+              label={
+                <span className="flex items-center gap-2">
+                  {label}
+                  <span className="text-muted-foreground/70 text-[10px]">{step.agent}</span>
+                </span>
+              }
               status="complete"
-            />
+            >
+              {/* Lo que el agente leyó de verdad, con su similitud y un enlace a su fragmento: es
+                  lo que permite comprobar que la respuesta sale de ahí y no de otra parte. */}
+              {step.results && step.results.length > 0 ? (
+                <ChainOfThoughtSearchResults>
+                  {step.results.map((result) => (
+                    <ChainOfThoughtSearchResult
+                      asChild
+                      className="border-border bg-muted border font-mono"
+                      key={result.chunk_id}
+                      title={`${result.observatory ?? "sin observatorio"} · similitud ${result.similarity}`}
+                    >
+                      <DocumentLink chunkId={result.chunk_id} docId={result.doc_id}>
+                        <span className={cn("size-1.5 rounded-full", PHENOMENON_DOT[result.phenomenon])} />
+                        {result.doc_id}
+                        <span className="text-muted-foreground">{result.similarity.toFixed(2)}</span>
+                      </DocumentLink>
+                    </ChainOfThoughtSearchResult>
+                  ))}
+                </ChainOfThoughtSearchResults>
+              ) : null}
+            </ChainOfThoughtStep>
           );
         })}
         {cost ? (

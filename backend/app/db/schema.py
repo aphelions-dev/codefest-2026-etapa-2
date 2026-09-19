@@ -24,10 +24,14 @@ create table if not exists places (
     place_id text primary key,
     name     text not null,
     level    text not null,
+    -- ISO 3166-1 alfa-2 del pais al que pertenece el lugar: es el codigo que nombra la bandera.
+    iso2     text,
     lon      double precision,
     lat      double precision,
     geometry jsonb
 );
+
+alter table places add column if not exists iso2 text;
 
 create table if not exists place_mentions (
     place_id   text    not null references places(place_id) on delete cascade,
@@ -50,4 +54,40 @@ create table if not exists document_dates (
 );
 
 create index if not exists document_dates_year on document_dates(published_on);
+
+-- Presencia de grupos armados por municipio de la cuenca amazonica, reconstruida del indice.
+-- `groups` vacio con `no_info` significa *sin informacion*, no *sin presencia*.
+create table if not exists armed_presence (
+    pcode       text primary key,
+    country     text not null,
+    admin1      text not null,
+    admin1_code text,
+    admin2      text not null,
+    population  integer,
+    area_km2    double precision,
+    groups      text[] not null default '{}',
+    no_info     boolean not null default false,
+    -- Poligono del municipio, de geoBoundaries: la fuente mide aqui, no en el departamento.
+    geometry    jsonb,
+    doc_id      text not null,
+    chunk_id    text not null
+);
+
+alter table armed_presence add column if not exists geometry jsonb;
+
+create index if not exists armed_presence_admin1 on armed_presence(admin1_code);
+create index if not exists armed_presence_country on armed_presence(country);
+
+-- Alertas tempranas de la Defensoria del Pueblo. `kind` distingue el riesgo inminente —una amenaza
+-- inmediata— del estructural, que es sostenido en el tiempo: son dos cosas y no se suman.
+create table if not exists early_warnings (
+    doc_id    text primary key,
+    code      text not null,
+    kind      text not null,
+    issued_on date,
+    chunk_id  text not null
+);
+
+create index if not exists early_warnings_kind on early_warnings(kind);
+create index if not exists early_warnings_issued on early_warnings(issued_on);
 """

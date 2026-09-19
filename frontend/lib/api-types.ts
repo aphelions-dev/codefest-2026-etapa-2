@@ -33,7 +33,10 @@ export interface paths {
         };
         /**
          * El documento y sus fragmentos
-         * @description El texto original detras de cualquier dato del tablero.
+         * @description El texto original detras de cualquier dato del tablero, en la ventana que contiene `around`.
+         *
+         *     Sin `around`, la ventana empieza en `start`. Centrarla en el fragmento citado es lo que cierra
+         *     la trazabilidad que exige la especificacion: el dato lleva a su `chunk_id`, no solo al `doc_id`.
          */
         get: operations["document_documents__doc_id__get"];
         put?: never;
@@ -125,6 +128,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/entities/quadrant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cuadrante de priorizacion de entidades
+         * @description Intensidad contra tendencia: a que entidades mirar primero, sin puntuar ninguna.
+         *
+         *     El eje horizontal son los documentos que nombran la entidad y el vertical, que proporcion de
+         *     ellos esta en la mitad reciente del corpus. Los dos son conteos verificables; las lineas de
+         *     corte son las medianas, asi que el cuadrante compara entidades entre si y no contra un umbral
+         *     inventado.
+         */
+        get: operations["entity_quadrant_entities_quadrant_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/presence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Presencia de grupos armados en la cuenca amazonica
+         * @description Que grupos armados registra cada territorio, y en que municipios.
+         *
+         *     El dato viene por municipio, pero la geometria municipal no esta en el indice: el mapa agrega al
+         *     territorio de nivel 1 —departamento, estado o provincia, segun el pais— y la lista conserva el
+         *     municipio, que es donde la fuente mide. Cubre los seis paises de la cuenca amazonica.
+         *
+         *     Es un conteo de presencia declarada por la fuente, no una medida de intensidad ni de riesgo.
+         */
+        get: operations["presence_presence_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Alertas tempranas de la Defensoria del Pueblo
+         * @description Donde y cuando se emitieron alertas, separando el riesgo inminente del estructural.
+         *
+         *     Una alerta de alcance nacional nombra varios departamentos y cuenta en cada uno: la cifra es
+         *     "alertas que nombran el territorio", no "alertas sobre el territorio", y la vista lo declara.
+         *
+         *     Las alertas son documentos del corpus, asi que `entity` las recorta igual que al resto del
+         *     tablero: es el filtro global, no uno propio de esta vista.
+         */
+        get: operations["alerts_alerts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/territories/{place_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Todo lo que el radar sabe de un territorio
+         * @description La evidencia de un territorio, para el detalle de la barra lateral.
+         *
+         *     Las tres secciones vienen de fuentes distintas y pueden no coincidir: un municipio puede
+         *     registrar presencia armada sin que ningun documento del corpus lo nombre, y eso es informacion,
+         *     no un error. Cada seccion declara de donde sale.
+         */
+        get: operations["territory_territories__place_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pregunta al asistente del radar
+         * @description Una pregunta, una respuesta con su evidencia y su coste.
+         */
+        post: operations["chat_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -134,7 +258,10 @@ export interface paths {
         };
         /**
          * Health
-         * @description Lo que mira el healthcheck del contenedor antes de dar el servicio por arriba.
+         * @description Lo que mira el healthcheck del contenedor.
+         *
+         *     Comprueba la base de datos: un proceso que responde pero no puede consultar el corpus esta
+         *     caido a efectos de la demo, y marcarlo sano solo retrasa el diagnostico.
          */
         get: operations["health_health_get"];
         put?: never;
@@ -149,6 +276,118 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AgentTokens
+         * @description El gasto de una capa. Sumados dan `metadata.tokens`, nunca solo el del orquestador.
+         */
+        AgentTokens: {
+            /** Input */
+            input: number;
+            /** Output */
+            output: number;
+            /** Total */
+            total: number;
+            /** Agente */
+            agente: string;
+            /** Modelo */
+            modelo: string;
+        };
+        /**
+         * Alert
+         * @description Una alerta concreta, con su codigo y el fragmento donde consta.
+         */
+        Alert: {
+            /** Doc Id */
+            doc_id: string;
+            /** Code */
+            code: string;
+            /** Kind */
+            kind: string;
+            /** Issued On */
+            issued_on?: string | null;
+            trace: components["schemas"]["Trace"];
+        };
+        /** AlertFeature */
+        AlertFeature: {
+            /**
+             * Type
+             * @default Feature
+             */
+            type: string;
+            /** Id */
+            id: string;
+            /** Geometry */
+            geometry: {
+                [key: string]: unknown;
+            };
+            properties: components["schemas"]["AlertProperties"];
+        };
+        /**
+         * AlertProperties
+         * @description Lo que el mapa pinta de un departamento: cuantas alertas de cada clase lo nombran.
+         */
+        AlertProperties: {
+            /** Place Id */
+            place_id: string;
+            /** Name */
+            name: string;
+            /** Iso2 */
+            iso2?: string | null;
+            /** Alerts */
+            alerts: number;
+            /** Imminent */
+            imminent: number;
+            /** Structural */
+            structural: number;
+            /** Latest */
+            latest?: string | null;
+            trace: components["schemas"]["Trace"];
+        };
+        /** AlertYear */
+        AlertYear: {
+            /** Year */
+            year: number;
+            /** Alerts */
+            alerts: number;
+            /** Imminent */
+            imminent: number;
+            /** Structural */
+            structural: number;
+        };
+        /**
+         * Alerts
+         * @description Alertas tempranas de la Defensoria del Pueblo.
+         *
+         *     `imminent` y `structural` van siempre separadas: una declara una amenaza inmediata y la otra una
+         *     sostenida en el tiempo, y sumarlas daria una cifra sin significado.
+         */
+        Alerts: {
+            /** Kind */
+            kind?: string | null;
+            /** Alerts */
+            alerts: number;
+            /** Imminent */
+            imminent: number;
+            /** Structural */
+            structural: number;
+            /** Since */
+            since?: string | null;
+            /** Until */
+            until?: string | null;
+            /** Features */
+            features: components["schemas"]["AlertFeature"][];
+            /** Years */
+            years: components["schemas"]["AlertYear"][];
+            /** Recent */
+            recent: components["schemas"]["Alert"][];
+        };
+        /** ArmedGroup */
+        ArmedGroup: {
+            /** Name */
+            name: string;
+            /** Municipalities */
+            municipalities: number;
+        };
         /**
          * Breakdown
          * @description Comparacion, distribucion y composicion sobre la metadata del corpus.
@@ -184,8 +423,29 @@ export interface components {
          */
         BreakdownField: "phenomenon" | "observatory" | "language" | "format";
         /**
+         * ChatRequest
+         * @description La pregunta del usuario. `input` es lo que manda el frontend de chat ya construido.
+         */
+        ChatRequest: {
+            /** Input */
+            input: string;
+        };
+        /**
+         * ChatResponse
+         * @description La respuesta del endpoint, con la estructura exacta que exige la especificacion.
+         */
+        ChatResponse: {
+            /** Respuesta */
+            respuesta: string;
+            evaluacion: components["schemas"]["Evaluation"];
+            metadata: components["schemas"]["Metadata"];
+        };
+        /**
          * Document
-         * @description El texto original que sustenta una visualizacion.
+         * @description El texto original que sustenta una visualizacion, en una ventana de sus fragmentos.
+         *
+         *     `total` y `start` situan la ventana dentro del documento: el lector sabe cuanto queda a cada
+         *     lado y puede pedir el tramo anterior o el siguiente sin traerse el documento entero.
          */
         Document: {
             /** Doc Id */
@@ -200,6 +460,10 @@ export interface components {
             language?: string | null;
             /** Format */
             format?: string | null;
+            /** Total */
+            total: number;
+            /** Start */
+            start: number;
             /** Fragments */
             fragments?: components["schemas"]["DocumentFragment"][];
         };
@@ -213,6 +477,20 @@ export interface components {
             num_tokens: number;
             /** Text */
             text: string;
+        };
+        /**
+         * Evaluation
+         * @description Lo que la organizacion mide: relevancia, fidelidad y trazabilidad de la respuesta.
+         */
+        Evaluation: {
+            /** Input */
+            input: string;
+            /** Actual Output */
+            actual_output: string;
+            /** Retrieval Context */
+            retrieval_context?: string[] | null;
+            /** Tools Called */
+            tools_called?: components["schemas"]["ToolCall"][];
         };
         /**
          * Graph
@@ -231,6 +509,9 @@ export interface components {
         /**
          * GraphEdge
          * @description Una arista de co-ocurrencia: el peso son los documentos compartidos.
+         *
+         *     `trace` es el fragmento concreto en el que las dos entidades coinciden: seleccionar una arista
+         *     tiene que llevar al texto que la sustenta, no solo al documento.
          */
         GraphEdge: {
             /** Source */
@@ -239,8 +520,7 @@ export interface components {
             target: string;
             /** Documents */
             documents: number;
-            /** Sample Doc */
-            sample_doc: string;
+            trace: components["schemas"]["Trace"];
         };
         /** GraphNode */
         GraphNode: {
@@ -264,7 +544,7 @@ export interface components {
          */
         Matrix: {
             /** Rows */
-            rows: string[];
+            rows: components["schemas"]["MatrixRow"][];
             /** Cols */
             cols: string[];
             /** Cols Field */
@@ -279,6 +559,8 @@ export interface components {
          * @description Una celda: el cruce de dos categorias, con el fragmento que la sustenta.
          */
         MatrixCell: {
+            /** Row Id */
+            row_id: string;
             /** Row */
             row: string;
             /** Col */
@@ -295,6 +577,69 @@ export interface components {
          * @enum {string}
          */
         MatrixColumn: "observatory" | "phenomenon" | "language" | "format";
+        /** MatrixRow */
+        MatrixRow: {
+            /** Entity Id */
+            entity_id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * Metadata
+         * @description El coste y el recorrido de la respuesta. `num_interacciones` son llamadas a modelo.
+         */
+        Metadata: {
+            /** Num Interacciones */
+            num_interacciones: number;
+            /** Agentes Invocados */
+            agentes_invocados: string[];
+            tokens: components["schemas"]["Tokens"];
+            /** Tokens Por Agente */
+            tokens_por_agente: components["schemas"]["AgentTokens"][];
+            /** Latencia Ms */
+            latencia_ms: number;
+            /** Estado */
+            estado: string;
+        };
+        /**
+         * Municipality
+         * @description El nivel en el que la fuente da el dato, con su traza al fragmento que lo sustenta.
+         */
+        Municipality: {
+            /** Pcode */
+            pcode: string;
+            /** Country */
+            country: string;
+            /** Admin1 */
+            admin1: string;
+            /** Admin2 */
+            admin2: string;
+            /** Population */
+            population?: number | null;
+            /** Groups */
+            groups: string[];
+            /** No Info */
+            no_info: boolean;
+            trace: components["schemas"]["Trace"];
+        };
+        /**
+         * MunicipalityFeature
+         * @description Un municipio como Feature de GeoJSON: es donde la fuente mide, y donde el mapa lo pinta.
+         */
+        MunicipalityFeature: {
+            /**
+             * Type
+             * @default Feature
+             */
+            type: string;
+            /** Id */
+            id: string;
+            /** Geometry */
+            geometry: {
+                [key: string]: unknown;
+            };
+            properties: components["schemas"]["Municipality"];
+        };
         /**
          * Phenomenon
          * @description Los tres fenomenos del reto.
@@ -320,6 +665,28 @@ export interface components {
             properties: components["schemas"]["PlaceProperties"];
         };
         /**
+         * PlaceFragment
+         * @description Un fragmento que nombra el territorio, con lo justo para juzgarlo y abrirlo entero.
+         */
+        PlaceFragment: {
+            /** Doc Id */
+            doc_id: string;
+            /** Chunk Id */
+            chunk_id: string;
+            /** Phenomenon */
+            phenomenon: number;
+            /** Observatory */
+            observatory?: string | null;
+            /** Language */
+            language?: string | null;
+            /** Mentions */
+            mentions: number;
+            /** Excerpt */
+            excerpt: string;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /**
          * PlaceLevel
          * @description Nivel territorial del mapa. El zoom del anexo pide cambiar de agregacion, no de fuente.
          * @enum {string}
@@ -331,6 +698,8 @@ export interface components {
             place_id: string;
             /** Name */
             name: string;
+            /** Iso2 */
+            iso2?: string | null;
             /** Documents */
             documents: number;
             /** Mentions */
@@ -351,12 +720,166 @@ export interface components {
             level: string;
             /** Phenomenon */
             phenomenon?: number | null;
+            /** Entity */
+            entity?: string | null;
             /** Features */
             features: components["schemas"]["PlaceFeature"][];
         };
         /**
+         * Presence
+         * @description Presencia de grupos armados en la cuenca amazonica.
+         *
+         *     El mapa agrega al departamento porque es el territorio con geometria; la lista conserva el
+         *     municipio, que es donde la fuente mide. Un municipio sin grupos y con `no_info` es *sin
+         *     informacion*, no *sin presencia*, y las dos cifras van separadas por eso.
+         */
+        Presence: {
+            /** Group */
+            group?: string | null;
+            /** Country */
+            country?: string | null;
+            /** Municipalities */
+            municipalities: number;
+            /** With Presence */
+            with_presence: number;
+            /** Without Information */
+            without_information: number;
+            /** Matching */
+            matching: number;
+            /** Groups */
+            groups: components["schemas"]["ArmedGroup"][];
+            /** Features */
+            features: components["schemas"]["MunicipalityFeature"][];
+            /** Regions */
+            regions: components["schemas"]["PresenceFeature"][];
+            /** Places */
+            places: components["schemas"]["Municipality"][];
+        };
+        /** PresenceFeature */
+        PresenceFeature: {
+            /**
+             * Type
+             * @default Feature
+             */
+            type: string;
+            /** Id */
+            id: string;
+            /** Geometry */
+            geometry: {
+                [key: string]: unknown;
+            };
+            properties: components["schemas"]["PresenceProperties"];
+        };
+        /**
+         * PresenceProperties
+         * @description Lo que el mapa pinta de un departamento: cuantos municipios suyos registran presencia.
+         */
+        PresenceProperties: {
+            /** Place Id */
+            place_id: string;
+            /** Name */
+            name: string;
+            /** Iso2 */
+            iso2?: string | null;
+            /** Municipalities */
+            municipalities: number;
+            /** With Presence */
+            with_presence: number;
+            /** Without Information */
+            without_information: number;
+            /** Groups */
+            groups: number;
+            trace: components["schemas"]["Trace"];
+        };
+        /**
+         * Quadrant
+         * @description Cuadrante de priorizacion: intensidad contra tendencia, con las lineas de corte explicitas.
+         */
+        Quadrant: {
+            /** Phenomenon */
+            phenomenon?: number | null;
+            /** Split Year */
+            split_year: number;
+            /** Median Documents */
+            median_documents: number;
+            /** Median Recent Share */
+            median_recent_share: number;
+            /** Dated Documents */
+            dated_documents: number;
+            /** Total Documents */
+            total_documents: number;
+            /** Points */
+            points: components["schemas"]["QuadrantPoint"][];
+        };
+        /**
+         * QuadrantPoint
+         * @description Una entidad en el plano. Las dos coordenadas son conteos, no un indice inventado.
+         */
+        QuadrantPoint: {
+            /** Entity Id */
+            entity_id: string;
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Documents */
+            documents: number;
+            /** Recent */
+            recent: number;
+            /** Earlier */
+            earlier: number;
+            trace: components["schemas"]["Trace"];
+        };
+        /**
+         * Territory
+         * @description Todo lo que el radar sabe de un territorio: quien lo nombra, quien opera y que se alerto.
+         *
+         *     Es el nivel en el que el tablero deja de mostrar cifras y muestra evidencia: cada elemento lleva
+         *     su `doc_id` y su `chunk_id`, y desde ahi se abre el documento por el fragmento exacto.
+         */
+        Territory: {
+            /** Place Id */
+            place_id: string;
+            /** Name */
+            name: string;
+            /** Iso2 */
+            iso2?: string | null;
+            /** Level */
+            level: string;
+            /** Phenomenon */
+            phenomenon?: number | null;
+            /** Total Fragments */
+            total_fragments: number;
+            /** Fragments */
+            fragments: components["schemas"]["PlaceFragment"][];
+            /** Municipalities */
+            municipalities: components["schemas"]["Municipality"][];
+            /** Alerts */
+            alerts: components["schemas"]["TerritoryAlert"][];
+        };
+        /**
+         * TerritoryAlert
+         * @description Una alerta que nombra el territorio.
+         */
+        TerritoryAlert: {
+            /** Doc Id */
+            doc_id: string;
+            /** Code */
+            code: string;
+            /** Kind */
+            kind: string;
+            /** Issued On */
+            issued_on?: string | null;
+            /** Excerpt */
+            excerpt: string;
+            trace: components["schemas"]["Trace"];
+        };
+        /**
          * Timeline
-         * @description Evolucion temporal. `dated` y `total` dicen sobre cuantos documentos se puede afirmar algo.
+         * @description Evolucion temporal por fuente.
+         *
+         *     `dated` y `total` dicen sobre cuantos documentos se puede afirmar algo; `series` son las fuentes
+         *     que tienen barra propia, en el orden en que se apilan.
          */
         Timeline: {
             /** Phenomenon */
@@ -367,15 +890,47 @@ export interface components {
             dated_documents: number;
             /** Total Documents */
             total_documents: number;
+            /** Series */
+            series: string[];
             /** Points */
             points: components["schemas"]["TimelinePoint"][];
         };
-        /** TimelinePoint */
+        /**
+         * TimelinePoint
+         * @description Un ano: el total y cuanto aporto cada fuente, para apilar la barra.
+         */
         TimelinePoint: {
             /** Year */
             year: number;
-            /** Documents */
-            documents: number;
+            /** Total */
+            total: number;
+            /** Sources */
+            sources: {
+                [key: string]: number;
+            };
+        };
+        /** Tokens */
+        Tokens: {
+            /** Input */
+            input: number;
+            /** Output */
+            output: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * ToolCall
+         * @description Una herramienta invocada. El tablero deduce de `name` que componente activar.
+         */
+        ToolCall: {
+            /** Name */
+            name: string;
+            /** Input Parameters */
+            input_parameters?: {
+                [key: string]: unknown;
+            };
+            /** Output */
+            output: string;
         };
         /**
          * Trace
@@ -445,9 +1000,15 @@ export interface operations {
     };
     document_documents__doc_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Fragmento en el que centrar la ventana */
+                around?: string | null;
+                /** @description Primer fragmento de la ventana */
+                start?: number;
+            };
             header?: never;
             path: {
+                /** @description Identificador del documento */
                 doc_id: string;
             };
             cookie?: never;
@@ -553,6 +1114,8 @@ export interface operations {
                 phenomenon?: components["schemas"]["Phenomenon"] | null;
                 /** @description Cuantos lugares devolver */
                 limit?: number;
+                /** @description Solo documentos que nombran la entidad */
+                entity?: string | null;
             };
             header?: never;
             path?: never;
@@ -601,6 +1164,184 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Timeline"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    entity_quadrant_entities_quadrant_get: {
+        parameters: {
+            query?: {
+                /** @description Limitar a un fenomeno */
+                phenomenon?: components["schemas"]["Phenomenon"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quadrant"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    presence_presence_get: {
+        parameters: {
+            query?: {
+                /** @description Limitar a un grupo armado */
+                group?: string | null;
+                /** @description Limitar la lista a un pais */
+                country?: string | null;
+                /** @description Cuantos municipios listar */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Presence"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    alerts_alerts_get: {
+        parameters: {
+            query?: {
+                /** @description Inminencia o Estructural */
+                kind?: string | null;
+                /** @description Solo alertas que nombran la entidad */
+                entity?: string | null;
+                /** @description Cuantas alertas recientes listar */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    territory_territories__place_id__get: {
+        parameters: {
+            query?: {
+                /** @description Limitar a un fenomeno */
+                phenomenon?: components["schemas"]["Phenomenon"] | null;
+                /** @description Limitar los municipios a un grupo */
+                group?: string | null;
+                /** @description Limitar las alertas a una clase de riesgo */
+                kind?: string | null;
+                /** @description Cuantos fragmentos devolver */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Pais o departamento */
+                place_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Territory"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatResponse"];
                 };
             };
             /** @description Validation Error */

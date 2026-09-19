@@ -17,8 +17,11 @@ export function Chat() {
   const onAsk = async (question: string) => {
     setPending(true);
     try {
-      const { answer, activations, steps, cost, status } = await ask(question);
-      setTurns((previous) => [...previous, { question, answer, activations, steps, cost, status }]);
+      const { answer, activations, steps, cost, status, anchors } = await ask(question);
+      setTurns((previous) => [
+        ...previous,
+        { question, answer, activations, steps, cost, status, anchors },
+      ]);
     } catch (error) {
       const message = error instanceof AgentUnavailable ? error.message : "El agente falló.";
       setTurns((previous) => [...previous, { question, answer: null, activations: [], error: message }]);

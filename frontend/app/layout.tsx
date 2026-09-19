@@ -5,6 +5,9 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
+// Banderas SVG: Windows no dibuja los emojis de bandera y mostraria el codigo del pais.
+import "flag-icons/css/flag-icons.min.css";
+
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
