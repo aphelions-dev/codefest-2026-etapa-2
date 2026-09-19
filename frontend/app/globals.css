@@ -1,26 +1,102 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-/* Tokens compartidos por todos los componentes: el Anexo B exige que un mismo fenomeno se
-   represente siempre con el mismo color en todas las vistas del tablero. */
-@theme {
-  --color-background: oklch(0.16 0.01 260);
-  --color-surface: oklch(0.21 0.012 260);
-  --color-border: oklch(0.32 0.014 260);
-  --color-foreground: oklch(0.96 0.005 260);
-  --color-muted: oklch(0.68 0.012 260);
-  --color-accent: oklch(0.78 0.13 200);
+@custom-variant dark (&:is(.dark *));
 
-  /* Un color por fenomeno, distinguibles con deuteranopia y protanopia. */
-  --color-phenomenon-1: oklch(0.74 0.14 85);
-  --color-phenomenon-2: oklch(0.72 0.13 235);
-  --color-phenomenon-3: oklch(0.7 0.15 335);
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-f1: var(--f1);
+  --color-f2: var(--f2);
+  --color-f3: var(--f3);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
 }
 
-html {
-  color-scheme: dark;
+/* Tema único: gris oscuro #121212 con acento cian. */
+.dark {
+  --background: #121212;
+  --foreground: #e7e7e7;
+  --card: #181818;
+  --card-foreground: #e7e7e7;
+  --popover: #1b1b1b;
+  --popover-foreground: #e7e7e7;
+  --primary: #22d3ee;
+  --primary-foreground: #0b1416;
+  --secondary: #222222;
+  --secondary-foreground: #d4d4d4;
+  --muted: #1f1f1f;
+  --muted-foreground: #8b8b8b;
+  --accent: #242424;
+  --accent-foreground: #f2f2f2;
+  --destructive: #f87171;
+  --border: #2a2a2a;
+  --input: #2e2e2e;
+  --ring: #22d3ee;
+  --radius: 0.625rem;
+  /* Un color por fenómeno del reto. */
+  --f1: #a78bfa;
+  --f2: #22d3ee;
+  --f3: #fbbf24;
 }
 
-body {
-  background: var(--color-background);
-  color: var(--color-foreground);
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    background-image: radial-gradient(circle at 50% -20%, rgb(34 211 238 / 0.06), transparent 45%);
+  }
+  html {
+    @apply font-sans;
+  }
+  ::selection {
+    background: rgb(34 211 238 / 0.25);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #2e2e2e transparent;
+  }
+  .maplibregl-popup-content {
+    @apply bg-transparent! shadow-none! p-0! rounded-none!;
+  }
+  .maplibregl-popup-tip {
+    @apply hidden!;
+  }
+  .maplibregl-ctrl-attrib {
+    @apply bg-background! text-muted-foreground! border-border! rounded-md! border! shadow-sm!;
+  }
+  .maplibregl-ctrl-attrib a {
+    @apply text-muted-foreground!;
+  }
+  .maplibregl-ctrl-attrib a:hover {
+    @apply text-foreground!;
+  }
+  .maplibregl-ctrl-attrib-button {
+    @apply bg-transparent! dark:invert;
+  }
 }

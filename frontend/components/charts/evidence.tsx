@@ -32,13 +32,13 @@ export function Evidence({ docId }: { readonly docId: string | null }) {
                 {fragment.text.slice(0, 460)}
                 {fragment.text.length > 460 ? "…" : ""}
               </blockquote>
-              <figcaption className="text-muted mt-1 text-[11px]">
+              <figcaption className="text-muted-foreground mt-1 text-[11px]">
                 {fragment.chunk_id} · fragmento {fragment.position} · {fragment.num_tokens} tokens
               </figcaption>
             </figure>
           ))}
           {(data.fragments ?? []).length > PREVIEW ? (
-            <p className="text-muted text-[11px]">
+            <p className="text-muted-foreground text-[11px]">
               y {(data.fragments ?? []).length - PREVIEW} fragmentos más en este documento
             </p>
           ) : null}

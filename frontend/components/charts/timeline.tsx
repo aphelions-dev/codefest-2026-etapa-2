@@ -41,13 +41,13 @@ export function Timeline({ phenomenon, entity }: { readonly phenomenon: number |
       ) : (
         <ResponsiveContainer height="100%" width="100%">
           <AreaChart data={data.points} margin={{ left: 0, right: 8, top: 8 }}>
-            <CartesianGrid stroke="var(--color-border)" vertical={false} />
-            <XAxis dataKey="year" stroke="var(--color-muted)" tick={{ fontSize: 11 }} />
-            <YAxis stroke="var(--color-muted)" tick={{ fontSize: 11 }} width={34} />
+            <CartesianGrid stroke="var(--border)" vertical={false} />
+            <XAxis dataKey="year" stroke="var(--muted-foreground)" tick={{ fontSize: 11 }} />
+            <YAxis stroke="var(--muted-foreground)" tick={{ fontSize: 11 }} width={34} />
             <Tooltip
               contentStyle={{
-                background: "var(--color-surface)",
-                border: "1px solid var(--color-border)",
+                background: "var(--popover)",
+                border: "1px solid var(--border)",
                 borderRadius: 8,
                 fontSize: 12,
               }}

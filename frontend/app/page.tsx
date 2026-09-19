@@ -1,5 +1,7 @@
 import { Suspense } from "react";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
+
 import { Chat } from "@/components/chat/surface";
 import { Dashboard } from "@/components/dashboard";
 import { SURFACE } from "@/lib/env";
@@ -15,8 +17,10 @@ import { SURFACE } from "@/lib/env";
 export default function Home() {
   if (SURFACE === "chat") return <Chat />;
   return (
-    <Suspense fallback={<main className="grid h-dvh place-items-center text-sm">Cargando el radar…</main>}>
-      <Dashboard />
-    </Suspense>
+    <TooltipProvider delayDuration={300}>
+      <Suspense fallback={<main className="grid h-dvh place-items-center text-sm">Cargando el radar…</main>}>
+        <Dashboard />
+      </Suspense>
+    </TooltipProvider>
   );
 }

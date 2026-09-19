@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 
 import { Bars } from "@/components/charts/bars";
@@ -8,12 +7,6 @@ import { Evidence } from "@/components/charts/evidence";
 import { Graph } from "@/components/charts/graph";
 import { Heatmap } from "@/components/charts/heatmap";
 import { Timeline } from "@/components/charts/timeline";
-
-// MapLibre necesita `window`, asi que el mapa se carga solo en el cliente: si entra en el
-// prerenderizado, el build falla sin decir donde.
-const Map = dynamic(() => import("@/components/charts/map").then((module) => module.Map), {
-  ssr: false,
-});
 
 /**
  * Registro de componentes. El componente se deduce del **nombre de la herramienta** que el agente
@@ -64,7 +57,8 @@ export function render(activation: Activation, context: Context): ReactNode {
     case "get_cooccurrence":
       return <Graph phenomenon={phenomenon} />;
     case "get_places":
-      return <Map level={String(filters.level ?? (phenomenon === 3 ? "department" : "country"))} phenomenon={phenomenon} />;
+      // El mapa es el lienzo, no un panel: activarlo mueve el radar de fondo, no abre una tarjeta.
+      return null;
     case "get_timeline":
       return <Timeline entity={filters.entity as string | undefined} phenomenon={phenomenon} />;
     case "get_document":

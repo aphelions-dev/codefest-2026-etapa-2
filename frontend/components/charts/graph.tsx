@@ -7,13 +7,13 @@ import type { Graph as GraphData } from "@/lib/api";
 import { useApi } from "@/lib/use-api";
 
 const TYPE_COLOR: Record<string, string> = {
-  organization: "var(--color-phenomenon-2)",
-  international_body: "var(--color-accent)",
-  company: "var(--color-phenomenon-1)",
-  program: "var(--color-phenomenon-3)",
-  technical_standard: "var(--color-muted)",
-  treaty: "var(--color-phenomenon-1)",
-  place: "var(--color-phenomenon-3)",
+  organization: "var(--f2)",
+  international_body: "var(--primary)",
+  company: "var(--f1)",
+  program: "var(--f3)",
+  technical_standard: "var(--muted-foreground)",
+  treaty: "var(--f1)",
+  place: "var(--f3)",
 };
 
 const SHOWN = 26;
@@ -85,7 +85,6 @@ export function Graph({ phenomenon }: { readonly phenomenon: number | null }) {
       }
       title="Entidades que aparecen juntas"
       unit="Una arista une dos entidades que comparten al menos 4 documentos; el grosor son los documentos compartidos"
-      wide
     >
       <div className="h-full min-h-64" ref={box}>
         {!data || nodes.length === 0 ? (
@@ -101,7 +100,7 @@ export function Graph({ phenomenon }: { readonly phenomenon: number | null }) {
                 <line
                   key={`${edge.source}-${edge.target}`}
                   opacity={dimmed ? 0.05 : 0.28}
-                  stroke="var(--color-muted)"
+                  stroke="var(--muted-foreground)"
                   strokeWidth={0.6 + (edge.documents / heaviest) * 3}
                   x1={a.x}
                   x2={b.x}
@@ -121,10 +120,10 @@ export function Graph({ phenomenon }: { readonly phenomenon: number | null }) {
                   opacity={dimmed ? 0.18 : 1}
                 >
                   <title>{`${node.name}: ${node.documents} documentos`}</title>
-                  <circle cx={node.x} cy={node.y} fill={TYPE_COLOR[node.type] ?? "var(--color-accent)"} r={r} />
+                  <circle cx={node.x} cy={node.y} fill={TYPE_COLOR[node.type] ?? "var(--primary)"} r={r} />
                   <text
                     className="pointer-events-none"
-                    fill="var(--color-foreground)"
+                    fill="var(--foreground)"
                     fontSize={9}
                     textAnchor="middle"
                     x={node.x}

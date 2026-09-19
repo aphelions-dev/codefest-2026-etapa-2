@@ -32,13 +32,13 @@ export function Bars({ by, phenomenon }: { readonly by: string; readonly phenome
       ) : (
         <ResponsiveContainer height="100%" width="100%">
           <BarChart data={data.buckets} layout="vertical" margin={{ left: 8, right: 16 }}>
-            <CartesianGrid horizontal={false} stroke="var(--color-border)" />
-            <XAxis stroke="var(--color-muted)" tick={{ fontSize: 11 }} type="number" />
-            <YAxis dataKey="label" stroke="var(--color-muted)" tick={{ fontSize: 11 }} type="category" width={116} />
+            <CartesianGrid horizontal={false} stroke="var(--border)" />
+            <XAxis stroke="var(--muted-foreground)" tick={{ fontSize: 11 }} type="number" />
+            <YAxis dataKey="label" stroke="var(--muted-foreground)" tick={{ fontSize: 11 }} type="category" width={116} />
             <Tooltip
               contentStyle={{
-                background: "var(--color-surface)",
-                border: "1px solid var(--color-border)",
+                background: "var(--popover)",
+                border: "1px solid var(--border)",
                 borderRadius: 8,
                 fontSize: 12,
               }}

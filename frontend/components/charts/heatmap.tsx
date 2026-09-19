@@ -6,10 +6,10 @@ import { useApi } from "@/lib/use-api";
 
 /** Escala secuencial para una variable numérica ordenada, sobre el fondo del tablero. */
 function shade(value: number, max: number): string {
-  if (value === 0) return "var(--color-background)";
+  if (value === 0) return "var(--background)";
   // Raíz cuadrada: unas pocas celdas enormes aplanarían el resto en una escala lineal.
   const t = Math.sqrt(value / max);
-  return `color-mix(in oklab, var(--color-accent) ${Math.round(12 + t * 88)}%, var(--color-background))`;
+  return `color-mix(in oklab, var(--primary) ${Math.round(12 + t * 88)}%, var(--background))`;
 }
 
 /**
@@ -31,7 +31,6 @@ export function Heatmap({ cols, phenomenon }: { readonly cols: string; readonly 
       source={data ? `${data.rows.length} entidades por ${data.cols.length} fuentes` : undefined}
       title="Entidades por fuente"
       unit="Color: documentos que nombran la entidad en esa fuente"
-      wide
     >
       {!data || data.cells.length === 0 ? (
         <PanelState empty="Sin menciones para este filtro" error={error} loading={loading} />
@@ -40,9 +39,9 @@ export function Heatmap({ cols, phenomenon }: { readonly cols: string; readonly 
           <table className="w-full border-separate border-spacing-[2px] text-[11px]">
             <thead>
               <tr>
-                <th className="bg-surface sticky left-0 z-10" />
+                <th className="bg-card sticky left-0 z-10" />
                 {data.cols.map((col) => (
-                  <th className="text-muted max-w-24 truncate px-1 pb-1 text-left font-normal" key={col} title={col}>
+                  <th className="text-muted-foreground max-w-24 truncate px-1 pb-1 text-left font-normal" key={col} title={col}>
                     {col}
                   </th>
                 ))}
@@ -52,7 +51,7 @@ export function Heatmap({ cols, phenomenon }: { readonly cols: string; readonly 
               {data.rows.map((row) => (
                 <tr key={row}>
                   <th
-                    className="bg-surface sticky left-0 z-10 max-w-40 truncate pr-2 text-left font-normal"
+                    className="bg-card sticky left-0 z-10 max-w-40 truncate pr-2 text-left font-normal"
                     title={row}
                   >
                     {row}
