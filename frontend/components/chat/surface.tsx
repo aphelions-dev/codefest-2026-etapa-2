@@ -15,11 +15,13 @@ export function Chat() {
   const [turns, setTurns] = useState<readonly Turn[]>([]);
   const [pending, setPending] = useState(false);
   const [live, setLive] = useState<readonly Progress[]>([]);
+  const [asking, setAsking] = useState<string | null>(null);
   const [visualized, setVisualized] = useState<number | null>(null);
 
   const onAsk = async (question: string) => {
     setPending(true);
     setLive([]);
+    setAsking(question);
     setVisualized(null);
     try {
       const result = await askStream(question, {
@@ -39,6 +41,7 @@ export function Chat() {
     <main className="mx-auto h-dvh w-full max-w-3xl border-x border-border/60">
       <ChatPanel
         onAsk={onAsk}
+        asking={asking}
         live={live}
         pending={pending}
         standalone

@@ -74,7 +74,7 @@ export function PlacesChart({
           <BarChart data={shown} layout="vertical" margin={{ left: 4, right: 16 }}>
             <CartesianGrid horizontal={false} stroke="var(--border)" />
             <XAxis allowDecimals={false} stroke="var(--muted-foreground)" tick={{ fontSize: 10 }} type="number" />
-            <YAxis dataKey="name" stroke="var(--muted-foreground)" tick={{ fontSize: 10 }} type="category" width={110} />
+            <YAxis dataKey="name" interval={0} stroke="var(--muted-foreground)" tick={{ fontSize: 10 }} type="category" width={110} />
             <Tooltip
               contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11 }}
               formatter={(value) => [formatNumber(Number(value)), unit] as [string, string]}

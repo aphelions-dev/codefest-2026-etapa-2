@@ -89,7 +89,9 @@ function periodOf(filters: Record<string, string | number | undefined>): Period 
 export function render(activation: Activation, context: Context, inline = false): ReactNode {
   const { tool, filters = {} } = activation;
   const phenomenon = (filters.phenomenon as number | undefined) ?? context.phenomenon;
-  const { entity, onEntity } = context;
+  // La entidad que declaró el agente manda sobre la del filtro global: es la que pidió la pregunta.
+  const entity = (filters.entity as string | undefined) ?? context.entity;
+  const { onEntity } = context;
   const period = periodOf(filters);
 
   switch (tool) {
@@ -108,7 +110,7 @@ export function render(activation: Activation, context: Context, inline = false)
         />
       );
     case "get_cooccurrence":
-      return <Graph entity={entity} onEntity={onEntity} period={period} phenomenon={phenomenon} />;
+      return <Graph entity={entity} initial={inline ? 12 : undefined} onEntity={onEntity} period={period} phenomenon={phenomenon} />;
     case "get_quadrant":
       return <Quadrant entity={entity} onEntity={onEntity} phenomenon={phenomenon} />;
     case "get_places":

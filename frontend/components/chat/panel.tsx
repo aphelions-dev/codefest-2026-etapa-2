@@ -82,6 +82,7 @@ export function ChatPanel({
   standalone = false,
   live = [],
   visualized = null,
+  asking = null,
   onOpenComponent,
 }: {
   readonly turns: readonly Turn[];
@@ -97,6 +98,8 @@ export function ChatPanel({
   readonly live?: readonly Progress[];
   /** Cuántos componentes eligió ya el visualizador en la pregunta en curso. */
   readonly visualized?: number | null;
+  /** La pregunta que se está respondiendo: se ve en el hilo desde que se envía. */
+  readonly asking?: string | null;
   /** En el tablero, abrir un componente de la respuesta en el diálogo grande. */
   readonly onOpenComponent?: (tool: Activation["tool"]) => void;
 }) {
@@ -175,6 +178,11 @@ export function ChatPanel({
             ))
           )}
           {/* Mientras trabajan: cada agente se marca en cuanto el backend dice que terminó. */}
+          {pending && asking ? (
+            <Message from="user">
+              <MessageContent className="text-[13px]">{asking}</MessageContent>
+            </Message>
+          ) : null}
           {pending ? <AgentLive steps={live} visualized={visualized} /> : null}
         </ConversationContent>
         <ConversationScrollButton />

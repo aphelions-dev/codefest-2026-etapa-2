@@ -58,6 +58,7 @@ export function Dashboard() {
   const [pending, setPending] = useState(false);
   // La pregunta en curso, en vivo: los agentes que ya terminaron y lo que eligió el visualizador.
   const [live, setLive] = useState<readonly Progress[]>([]);
+  const [asking, setAsking] = useState<string | null>(null);
   const [visualized, setVisualized] = useState<number | null>(null);
   // El componente que se pidió abrir desde la respuesta del chat.
   const [focus, setFocus] = useState<Activation["tool"] | null>(null);
@@ -177,6 +178,12 @@ export function Dashboard() {
         setPhenomenon((filters.phenomenon as number | undefined) ?? null);
       }
     }
+    // La línea de tiempo es la franja: su fenómeno pasa a ser el filtro global, si el mapa no fijó otro.
+    const years = chosen.find((activation) => activation.tool === "get_timeline");
+    if (years && !map && years.filters?.phenomenon) setPhenomenon(years.filters.phenomenon as number);
+    // La entidad que declaró el agente pasa a ser el filtro global: recorta el mapa y la franja.
+    const named = chosen.find((activation) => activation.filters?.entity);
+    if (named) setEntity(named.filters?.entity as string);
     const dated = chosen.find((activation) => activation.filters?.date_from || activation.filters?.date_to);
     if (dated) {
       setPeriod({
@@ -198,6 +205,7 @@ export function Dashboard() {
   const onAsk = async (question: string) => {
     setPending(true);
     setLive([]);
+    setAsking(question);
     setVisualized(null);
     let visualizedHere = false;
     try {
@@ -304,6 +312,7 @@ export function Dashboard() {
       >
         <ChatPanel
           collapsed={!chatOpen}
+          asking={asking}
           live={live}
           onAsk={onAsk}
           onOpenComponent={(tool) => {
