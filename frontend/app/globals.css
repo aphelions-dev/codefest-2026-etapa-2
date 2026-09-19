@@ -71,6 +71,15 @@
   --f1: #a78bfa;
   --f2: #22d3ee;
   --f3: #fbbf24;
+  /* Un color por tipo de entidad, ninguno de los de fenómeno: un «programa» en ámbar se leería
+     como F3. Se distinguen también por nombre en la leyenda, no solo por el color. */
+  --e-organization: #34d399;
+  --e-international-body: #60a5fa;
+  --e-company: #f472b6;
+  --e-program: #a3e635;
+  --e-technical-standard: #94a3b8;
+  --e-treaty: #fb923c;
+  --e-place: #e2e8f0;
 }
 
 @layer base {

@@ -8,14 +8,15 @@ import { periodParams, usePeriod } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
 import { useDocument } from "@/lib/use-document";
 
+// Paleta propia de los tipos, en `globals.css`: los colores de fenómeno quedan para los fenómenos.
 const TYPE_COLOR: Record<string, string> = {
-  organization: "var(--f2)",
-  international_body: "var(--primary)",
-  company: "var(--f1)",
-  program: "var(--f3)",
-  technical_standard: "var(--muted-foreground)",
-  treaty: "var(--f1)",
-  place: "var(--f3)",
+  organization: "var(--e-organization)",
+  international_body: "var(--e-international-body)",
+  company: "var(--e-company)",
+  program: "var(--e-program)",
+  technical_standard: "var(--e-technical-standard)",
+  treaty: "var(--e-treaty)",
+  place: "var(--e-place)",
 };
 
 /** Nombre legible de cada tipo de entidad: el filtro y la leyenda no muestran el identificador. */
@@ -37,9 +38,11 @@ const INNER_RING = 12;
 type Positioned = { id: string; name: string; type: string; documents: number; x: number; y: number };
 
 /**
- * Red de co-ocurrencia con disposición radial: la entidad más presente al centro y el resto en
- * dos anillos. Un grafo dirigido por fuerzas con 26 nodos se cruza consigo mismo; el radial deja
- * leer los vecinos, que es la tarea que el componente tiene que resolver.
+ * Red de co-ocurrencia con disposición radial (B.3.2): la entidad de interés al centro y el resto en
+ * dos anillos. Sin selección, el centro es la más presente; con una entidad elegida, pasa ella al
+ * centro y sus vecinas al anillo interior, de la que más documentos comparte a la que menos. Un
+ * grafo dirigido por fuerzas con 26 nodos se cruza consigo mismo; el radial deja leer los vecinos,
+ * que es la tarea que el componente tiene que resolver.
  */
 export function Graph({
   phenomenon,
@@ -83,7 +86,7 @@ export function Graph({
   const visible = (data?.nodes ?? []).filter((node) => !hidden.includes(node.type));
 
   if (data && visible.length > 0) {
-    const placed = visible.slice(0, shown);
+    const placed = centred(visible, data.edges, focus).slice(0, shown);
     const ids = new Set(placed.map((node) => node.entity_id));
     edges = data.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
     const cx = size.width / 2;
@@ -228,4 +231,27 @@ export function Graph({
       </div>
     </Panel>
   );
+}
+
+/**
+ * Los nodos en el orden en que se colocan: la entidad elegida primero (al centro), luego sus vecinas
+ * por documentos compartidos (anillo interior) y después el resto, que ya viene por presencia.
+ */
+function centred<N extends { entity_id: string }>(
+  nodes: readonly N[],
+  edges: GraphData["edges"],
+  focus: string | null,
+): N[] {
+  const own = nodes.find((node) => node.entity_id === focus);
+  if (!own) return [...nodes];
+  const shared = new Map<string, number>();
+  for (const edge of edges) {
+    if (edge.source === focus) shared.set(edge.target, edge.documents);
+    if (edge.target === focus) shared.set(edge.source, edge.documents);
+  }
+  const neighbours = nodes
+    .filter((node) => shared.has(node.entity_id))
+    .sort((a, b) => (shared.get(b.entity_id) ?? 0) - (shared.get(a.entity_id) ?? 0));
+  const rest = nodes.filter((node) => node !== own && !shared.has(node.entity_id));
+  return [own, ...neighbours, ...rest];
 }
