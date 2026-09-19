@@ -22,8 +22,15 @@ ENV NEXT_PUBLIC_SURFACE=$NEXT_PUBLIC_SURFACE
 RUN pnpm build
 
 FROM node:22-slim AS runtime
+
+# curl: el healthcheck de la plataforma se inyecta desde fuera de la imagen y usa curl o wget. Sin
+# el, el despliegue se marca como no saludable y se revierte aunque la aplicacion este respondiendo.
 # Sin root: el analisis estatico del codigo entregado lo revisa.
-RUN useradd --create-home --uid 10001 radar
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 radar
+
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -36,6 +43,6 @@ EXPOSE 3000
 ENV HOSTNAME=0.0.0.0 PORT=3000
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=5 \
-    CMD node -e "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+    CMD curl -fsS http://127.0.0.1:3000/ || exit 1
 
 CMD ["node", "server.js"]

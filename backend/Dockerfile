@@ -15,8 +15,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.12-slim-trixie AS runtime
 
+# curl: el healthcheck de la plataforma se inyecta desde fuera de la imagen y usa curl o wget. Sin
+# el, el despliegue se marca como no saludable y se revierte aunque la aplicacion este respondiendo.
 # Sin root: el analisis estatico del codigo entregado lo revisa.
-RUN useradd --create-home --uid 10001 radar
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 radar
+
 WORKDIR /app
 
 COPY --from=build --chown=radar:radar /app /app
@@ -27,6 +33,6 @@ USER radar
 EXPOSE 8000
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=5 \
-    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status == 200 else 1)"
+    CMD curl -fsS http://127.0.0.1:8000/health || exit 1
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
