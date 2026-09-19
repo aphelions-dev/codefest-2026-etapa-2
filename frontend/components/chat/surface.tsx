@@ -17,11 +17,8 @@ export function Chat() {
   const onAsk = async (question: string) => {
     setPending(true);
     try {
-      const { answer, activations, steps, cost, status, anchors } = await ask(question);
-      setTurns((previous) => [
-        ...previous,
-        { question, answer, activations, steps, cost, status, anchors },
-      ]);
+      const result = await ask(question);
+      setTurns((previous) => [...previous, { question, ...result }]);
     } catch (error) {
       const message = error instanceof AgentUnavailable ? error.message : "El agente falló.";
       setTurns((previous) => [...previous, { question, answer: null, activations: [], error: message }]);
@@ -31,8 +28,13 @@ export function Chat() {
   };
 
   return (
-    <main className="mx-auto h-dvh w-full max-w-2xl">
-      <ChatPanel onAsk={onAsk} pending={pending} turns={turns} />
+    <main className="mx-auto h-dvh w-full max-w-3xl border-x border-border/60">
+      <ChatPanel
+        onAsk={onAsk}
+        pending={pending}
+        subtitle="Asistente del Radar Estratégico · cada afirmación con su fuente del corpus"
+        turns={turns}
+      />
     </main>
   );
 }

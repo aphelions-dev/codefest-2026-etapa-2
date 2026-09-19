@@ -1,9 +1,10 @@
 "use client";
 
-import { MessageSquareIcon, PanelRightCloseIcon, PanelRightOpenIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, MessageSquareIcon, PanelRightCloseIcon, PanelRightOpenIcon, RotateCcwIcon } from "lucide-react";
+import { useState } from "react";
 
 import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ai-elements/conversation";
-import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import { Message, MessageAction, MessageActions, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import {
   PromptInput,
   PromptInputBody,
@@ -11,14 +12,13 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
-import { Shimmer } from "@/components/ai-elements/shimmer";
-import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
-import { AgentStatus, AgentTrace, type Cost } from "@/components/agent-trace";
+import { Suggestion } from "@/components/ai-elements/suggestion";
+import { AgentPending, AgentStatus, AgentTrace, AnswerSources } from "@/components/agent-trace";
 import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
 import { type Activation, TOOLS } from "@/components/registry";
 import { DocumentLink } from "@/components/document-view";
-import { linkCitations, parseCitation, type Step } from "@/lib/agent";
+import { type AgentRun, type Cost, linkCitations, parseCitation, type Source } from "@/lib/agent";
 import { cn } from "@/lib/utils";
 import type { ComponentProps } from "react";
 
@@ -49,7 +49,8 @@ export type Turn = {
   readonly question: string;
   readonly answer: string | null;
   readonly activations: readonly Activation[];
-  readonly steps?: readonly Step[];
+  readonly agents?: readonly AgentRun[];
+  readonly sources?: readonly Source[];
   readonly cost?: Cost;
   readonly status?: string;
   readonly error?: string;
@@ -57,10 +58,11 @@ export type Turn = {
   readonly anchors?: Record<string, string>;
 };
 
+// Una pregunta por fenómeno: quien llega ve de qué va el corpus y qué se le puede pedir.
 const SUGGESTIONS = [
-  "¿Qué entidades domina cada observatorio en seguridad espacial?",
-  "¿Qué departamentos concentran las dinámicas territoriales?",
-  "¿Qué actores aparecen juntos en el corpus territorial?",
+  { tag: "F1", text: "¿Qué desafíos plantea la IA en las operaciones militares?" },
+  { tag: "F2", text: "¿Qué riesgos genera la basura espacial en la órbita baja?" },
+  { tag: "F3", text: "¿Qué grupos armados operan en el Putumayo?" },
 ];
 
 /**
@@ -74,12 +76,15 @@ export function ChatPanel({
   collapsed,
   onAsk,
   onToggle,
+  subtitle = "Pregunta y el radar se reorganiza",
 }: {
   readonly turns: readonly Turn[];
   readonly pending: boolean;
   readonly collapsed?: boolean;
   readonly onAsk: (question: string) => void;
   readonly onToggle?: () => void;
+  /** Lo que dice la cabecera: en el tablero, que el radar responde; a solas, qué es el asistente. */
+  readonly subtitle?: string;
 }) {
   // Plegado, todo el riel abre el analista: no hace falta atinar al icono.
   if (collapsed) {
@@ -108,7 +113,7 @@ export function ChatPanel({
         <MessageSquareIcon className="text-primary size-4" />
         <div className="min-w-0 flex-1">
           <h2 className="text-[13px] leading-tight font-medium">Analista</h2>
-          <p className="text-muted-foreground text-[11px] leading-snug">Pregunta y el radar se reorganiza</p>
+          <p className="text-muted-foreground text-[11px] leading-snug">{subtitle}</p>
         </div>
         {onToggle ? (
           <IconButton label="Plegar el analista" onClick={onToggle} side="left">
@@ -121,68 +126,41 @@ export function ChatPanel({
         <ConversationContent className="gap-4 px-3 py-3">
           {turns.length === 0 ? (
             <div className="space-y-3">
-              <p className="text-muted-foreground text-[11px] leading-relaxed">
-                IA y capacidades estratégicas, seguridad del entorno espacial o dinámicas territoriales. Cada
-                afirmación va con el documento que la sustenta.
+              <p className="text-muted-foreground text-[12px] leading-relaxed">
+                Pregunta sobre IA y capacidades estratégicas, seguridad del entorno espacial o dinámicas
+                territoriales. Cinco agentes revisan, buscan, redactan y verifican, y cada afirmación va con el
+                documento que la sustenta.
               </p>
-              <Suggestions className="flex-col items-stretch">
+              {/* Columna y no la fila con scroll de ai-elements: en un panel estrecho, esa fila se sale por la derecha. */}
+              <div className="flex flex-col gap-1.5">
                 {SUGGESTIONS.map((suggestion) => (
                   <Suggestion
-                    className="h-auto justify-start py-2 text-left text-[11px] whitespace-normal"
-                    key={suggestion}
-                    onClick={() => onAsk(suggestion)}
-                    suggestion={suggestion}
-                  />
+                    className="h-auto w-full justify-start gap-2 rounded-lg py-2 text-left text-[12px] whitespace-normal"
+                    key={suggestion.text}
+                    onClick={() => onAsk(suggestion.text)}
+                    suggestion={suggestion.text}
+                  >
+                    <span className="text-muted-foreground font-mono text-[10px]">{suggestion.tag}</span>
+                    {suggestion.text}
+                  </Suggestion>
                 ))}
-              </Suggestions>
+              </div>
             </div>
           ) : (
             turns.map((turn, index) => (
-              <div className="space-y-2" key={index}>
-                <Message from="user">
-                  <MessageContent className="text-[13px]">{turn.question}</MessageContent>
-                </Message>
-                <Message from="assistant">
-                  <MessageContent className="text-[13px]">
-                    {turn.error ? (
-                      <span className="text-muted-foreground text-[11px]">{turn.error}</span>
-                    ) : (
-                      // Markdown, y cada cita enlazada a su fragmento: la viñeta que afirma algo y
-                      // el texto que lo sustenta quedan a un clic.
-                      <MessageResponse components={RESPONSE_COMPONENTS}>
-                        {linkCitations(turn.answer ?? "", turn.anchors ?? {})}
-                      </MessageResponse>
-                    )}
-                  </MessageContent>
-                </Message>
-                {turn.steps && turn.steps.length > 0 ? (
-                  <AgentTrace cost={turn.cost} steps={turn.steps} />
-                ) : null}
-                {turn.status ? <AgentStatus status={turn.status} /> : null}
-                {turn.activations.length > 0 ? (
-                  <ul className="text-muted-foreground flex flex-wrap gap-1 px-1 text-[10px]">
-                    {turn.activations.map((activation) => (
-                      <li className="border-border/60 rounded-full border px-2 py-0.5" key={activation.tool}>
-                        {TOOLS[activation.tool].label} · {TOOLS[activation.tool].task}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
+              <TurnView key={index} onAsk={onAsk} pending={pending} turn={turn} />
             ))
           )}
-          {/* Mientras el agente trabaja: el texto se mueve, así se distingue de una respuesta corta. */}
-          {pending ? (
-            <Shimmer as="p" className="px-1 text-[11px]" duration={1.6}>
-              Consultando el corpus…
-            </Shimmer>
-          ) : null}
+          {/* Mientras trabajan: la cadena de agentes que va a recorrer la pregunta. */}
+          {pending ? <AgentPending /> : null}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
 
+      {/* El margen va en un contenedor: la caja ocupa todo su ancho, y con margen propio se salía del panel. */}
+      <div className="p-3">
       <PromptInput
-        className="border-border/60 m-3 rounded-lg border"
+        className="border-border/60 rounded-lg border"
         onSubmit={(message) => {
           const text = message.text?.trim();
           if (text && !pending) onAsk(text);
@@ -196,6 +174,79 @@ export function ChatPanel({
           </PromptInputFooter>
         </PromptInputBody>
       </PromptInput>
+      </div>
     </aside>
+  );
+}
+
+/** Una pregunta y lo que volvió: la respuesta, su estado, sus fuentes y cómo se llegó a ella. */
+function TurnView({
+  turn,
+  pending,
+  onAsk,
+}: {
+  readonly turn: Turn;
+  readonly pending: boolean;
+  readonly onAsk: (question: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    await navigator.clipboard.writeText(turn.answer ?? "");
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className="space-y-2">
+      <Message from="user">
+        <MessageContent className="text-[13px]">{turn.question}</MessageContent>
+      </Message>
+      <Message from="assistant">
+        <MessageContent className="text-[13px] leading-relaxed">
+          {turn.error ? (
+            <span className="text-muted-foreground text-[12px]">{turn.error}</span>
+          ) : (
+            // Markdown, y cada cita enlazada a su fragmento: la viñeta que afirma algo y el texto
+            // que lo sustenta quedan a un clic.
+            <MessageResponse components={RESPONSE_COMPONENTS}>
+              {linkCitations(turn.answer ?? "", turn.anchors ?? {})}
+            </MessageResponse>
+          )}
+        </MessageContent>
+      </Message>
+
+      {turn.status ? <AgentStatus status={turn.status} /> : null}
+      {turn.sources ? <AnswerSources sources={turn.sources} /> : null}
+      {turn.agents && turn.cost ? <AgentTrace agents={turn.agents} cost={turn.cost} /> : null}
+
+      <div className="flex flex-wrap items-center gap-1">
+        {turn.activations.length > 0 ? (
+          <ul aria-label="Componentes que activó" className="text-muted-foreground flex flex-wrap gap-1 text-[10px]">
+            {turn.activations.map((activation) => {
+              const Icon = TOOLS[activation.tool].icon;
+              return (
+                <li className="border-border/60 flex items-center gap-1 rounded-full border px-2 py-0.5" key={activation.tool}>
+                  <Icon className="size-3" />
+                  {TOOLS[activation.tool].label}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+        <MessageActions className="ml-auto">
+          {turn.error ? (
+            // Reintentar lo decide quien pregunta: el agente no reintenta solo, que contaría como
+            // interacción en la eficiencia.
+            <MessageAction disabled={pending} label="Reintentar" onClick={() => onAsk(turn.question)} tooltip="Reintentar">
+              <RotateCcwIcon className="size-3.5" />
+            </MessageAction>
+          ) : (
+            <MessageAction label="Copiar la respuesta" onClick={copy} tooltip={copied ? "Copiada" : "Copiar"}>
+              {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+            </MessageAction>
+          )}
+        </MessageActions>
+      </div>
+    </div>
   );
 }
