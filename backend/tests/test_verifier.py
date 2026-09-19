@@ -50,7 +50,7 @@ async def test_rechaza_lo_que_la_evidencia_no_sostiene():
 
 
 def test_extrae_las_citas():
-    assert verifier.cited("Algo [F1-CSET-065] y algo [F2-UNOOSA-005].") == {
+    assert verifier.cited("Algo [F1-CSET-065] y algo [F2-UNOOSA-005].", [fragment("F1-CSET-065", "a"), fragment("F2-UNOOSA-005", "b")]) == {
         "F1-CSET-065",
         "F2-UNOOSA-005",
     }
@@ -65,7 +65,7 @@ async def test_acepta_la_cita_con_guion_no_separable():
         client, "fast-test", "Una afirmacion [F2\u2011SWF\u2011078].", fragments
     )
 
-    assert verifier.cited("[F2\u2011SWF\u2011078]") == {"F2-SWF-078"}
+    assert verifier.cited("[F2\u2011SWF\u2011078]", [fragment("F2-SWF-078", "texto")]) == {"F2-SWF-078"}
     assert ok is True
 
 
@@ -86,13 +86,13 @@ async def test_la_cita_inventada_sigue_cayendo():
     fragments = [fragment("F2-SWF-078", "texto")]
 
     assert verifier.untraceable("Algo [F9\u2011FALSO\u2011001].", fragments) == {"F9-FALSO-001"}
-    assert verifier.untraceable("Algo [F2-SWF-078-chunk-9999].", fragments) == {
-        "F2-SWF-078-chunk-9999"
-    }
+    # Un numero de fragmento equivocado sobre un documento que si se recupero no es
+    # fabricacion: es una errata. Si fuera la unica cita, "sin citas" la rechaza igual.
+    assert verifier.untraceable("Algo [F2-SWF-078-chunk-9999].", fragments) == set()
 
 
 def test_extrae_la_cita_con_espacios_dentro():
-    assert verifier.cited("Algo [ F1-CSET-065 ].") == {"F1-CSET-065"}
+    assert verifier.cited("Algo [ F1-CSET-065 ].", [fragment("F1-CSET-065", "texto")]) == {"F1-CSET-065"}
 
 
 async def test_acepta_la_cita_con_corchetes_japoneses():
@@ -104,7 +104,7 @@ async def test_acepta_la_cita_con_corchetes_japoneses():
         client, "fast-test", "Una afirmacion 【F2-SWF-043】.", fragments
     )
 
-    assert verifier.cited("【F2-SWF-043】") == {"F2-SWF-043"}
+    assert verifier.cited("【F2-SWF-043】", fragments) == {"F2-SWF-043"}
     assert ok is True, reason
 
 

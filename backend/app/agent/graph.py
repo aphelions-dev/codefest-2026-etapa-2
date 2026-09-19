@@ -15,6 +15,7 @@ que corresponda, nunca se falla.
 """
 
 import logging
+import re
 from dataclasses import dataclass
 
 from langgraph.graph import END, START, StateGraph
@@ -27,12 +28,13 @@ from app.config import Settings
 
 log = logging.getLogger("agent.graph")
 
-ROUTE_SCHEMA = {
-    "type": "object",
-    "properties": {"route": {"type": "string", "enum": ["corpus", "small_talk", "off_topic"]}},
-    "required": ["route"],
-    "additionalProperties": False,
-}
+# Saludos y preguntas sobre el propio asistente: lo unico que no se busca en el corpus. Tiene que
+# ser un mensaje corto y empezar asi, para que "hola, que dice el corpus sobre..." vaya a buscar.
+SMALL_TALK = re.compile(
+    r"^(hola|buenas|buenos d[ií]as|buenas tardes|hey|qu[eé] tal|c[oó]mo est[aá]s|gracias|"
+    r"qui[eé]n eres|qu[eé] eres|qu[eé] puedes hacer|qu[eé] haces|ayuda|help)(?![a-záéíóúñ])[\s\S]{0,40}$",
+    re.IGNORECASE,
+)
 
 DECOMPOSE_SCHEMA = {
     "type": "object",
@@ -87,31 +89,30 @@ def build(runtime: Runtime):
         }
 
     async def orchestrator(state: State) -> State:
-        """Enruta y, si hay que buscar, prepara las formulaciones."""
+        """Enruta y, si hay que buscar, prepara las formulaciones.
+
+        El enrutado se decide con una regla, no con el modelo, y el defecto es buscar. Medido
+        sobre las 50 consultas del reto: preguntarselo al modelo grande costaba una llamada en
+        cada consulta y mandaba dos fuera de alcance —amenazas ciberneticas sobre sistemas de IA,
+        y crimen organizado frente a las instituciones—, que son relevancia cero garantizada.
+        Enumerar temas siempre deja fuera el siguiente.
+
+        Y ademas era redundante: el filtro de fuera-de-alcance que funciona no es este, es el
+        umbral de evidencia. Una consulta ajena al corpus se queda en 0,404 de similitud y no
+        pasa de 0,52, asi que acaba en `sin_evidencia` sin que nadie tenga que adivinar el tema.
+        """
         question = state["sanitized"]
-        try:
-            text, route_usage = await runtime.client.complete(
-                agent="orchestrator",
-                model=deep,
-                system=prompts.ROUTER,
-                user=question,
-                json_schema=ROUTE_SCHEMA,
-            )
-        except ModelError:
-            # Sin enrutador se busca: es lo que el usuario vino a hacer.
-            log.exception("el enrutador no respondio; se asume corpus")
-            return _to_corpus(question, [], [])
-
-        route = parse_json(text, {"route": "corpus"}).get("route", "corpus")
+        saludo = bool(SMALL_TALK.match(question.strip()))
         tools = [
-            ToolRecord(name="route_intent", input_parameters={"query": question}, output=route)
+            ToolRecord(
+                name="route_intent",
+                input_parameters={"query": question},
+                output="small_talk" if saludo else "corpus",
+            )
         ]
-
-        if route == "small_talk":
-            return _canned(prompts.SMALL_TALK, [route_usage], tools)
-        if route == "off_topic":
-            return _canned(prompts.OFF_TOPIC, [route_usage], tools)
-        return await _decompose(question, state.get("rejection", ""), [route_usage], tools)
+        if saludo:
+            return _canned(prompts.SMALL_TALK, [], tools)
+        return await _decompose(question, state.get("rejection", ""), [], tools)
 
     async def _decompose(question, rejection, usage, tools) -> State:
         try:

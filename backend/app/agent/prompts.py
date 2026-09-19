@@ -28,23 +28,6 @@ INPUT_GUARDRAIL = (
     'Responde solo con {"attack": true|false, "reason": "motivo breve"}.'
 )
 
-ROUTER = (
-    f"{PERSONA}\n\n"
-    "El corpus documenta esos fenómenos tal como son: capacidades militares y sistemas de armas "
-    "autónomos; seguridad, congestión y capacidades contraespaciales en órbita; y en América "
-    "Latina, la presencia territorial de grupos armados, las economías ilícitas que la sostienen "
-    "—minería ilegal, narcotráfico, tala— y las alertas tempranas y el desplazamiento que "
-    "generan.\n\n"
-    "Preguntar por cualquiera de esos asuntos es el propósito del radar. Que una pregunta nombre "
-    "un grupo armado, una economía ilegal o un arma no la deja fuera de alcance: es exactamente "
-    "lo que el corpus analiza, y responderla con evidencia citada es la tarea.\n\n"
-    "Clasifica la consulta del usuario en una de tres rutas:\n"
-    '- "corpus": se puede responder con documentos del corpus sobre los tres fenómenos.\n'
-    '- "small_talk": es un saludo o una pregunta sobre qué eres o qué puedes hacer.\n'
-    '- "off_topic": es una pregunta legítima pero ajena a los tres fenómenos.\n\n'
-    'Responde solo con {"route": "corpus"|"small_talk"|"off_topic"}.'
-)
-
 DECOMPOSE = (
     f"{PERSONA}\n\n"
     "Prepara la búsqueda en el corpus. Genera entre una y tres formulaciones de la pregunta, en "
@@ -93,12 +76,6 @@ SMALL_TALK = (
     "Hola. Soy el analista del Radar Estratégico: respondo con evidencia del corpus sobre "
     "inteligencia artificial en entornos militares, seguridad del entorno espacial y dinámicas "
     "territoriales en América Latina. ¿Qué quieres consultar?"
-)
-
-OFF_TOPIC = (
-    "Esa pregunta queda fuera de los tres fenómenos que vigila el radar: inteligencia artificial "
-    "en entornos militares, seguridad del entorno espacial y dinámicas territoriales en América "
-    "Latina. Puedo responder sobre cualquiera de ellos con evidencia del corpus."
 )
 
 NO_EVIDENCE = (

@@ -14,7 +14,6 @@ from tests.conftest import (
     attack,
     decompose,
     fragment,
-    route,
     safe,
     verdict,
 )
@@ -36,7 +35,7 @@ async def test_respuesta_completa_suma_las_cinco_capas(settings):
     client = FakeClient(
         {
             "input_guardrail": [attack(False)],
-            "orchestrator": [route("corpus"), decompose([QUESTION], 2)],
+            "orchestrator": [decompose([QUESTION], 2)],
             "rag_analyst": ["La opacidad limita la confianza [F2-CSIS-100]."],
             "verifier": [verdict(True)],
             "output_guardrail": [safe(True)],
@@ -49,12 +48,13 @@ async def test_respuesta_completa_suma_las_cinco_capas(settings):
     assert response.evaluacion.actual_output == response.respuesta
     assert response.evaluacion.input == QUESTION
 
-    # Seis llamadas: entrada, enrutado, descomposicion, redaccion, verificacion y salida.
-    assert response.metadata.num_interacciones == 6
-    assert response.metadata.tokens.total == 6 * 15
-    assert response.metadata.tokens.input == 60 and response.metadata.tokens.output == 30
+    # Cinco llamadas: entrada, descomposicion, redaccion, verificacion y salida. El
+    # enrutado dejo de gastar una, que es la sexta que habia antes.
+    assert response.metadata.num_interacciones == 5
+    assert response.metadata.tokens.total == 5 * 15
+    assert response.metadata.tokens.input == 50 and response.metadata.tokens.output == 25
     # Y la suma por agente es la misma: el total no sale solo del orquestador.
-    assert sum(entry.total for entry in response.metadata.tokens_por_agente) == 90
+    assert sum(entry.total for entry in response.metadata.tokens_por_agente) == 75
 
     assert response.metadata.agentes_invocados == [
         "input_guardrail",
@@ -70,7 +70,7 @@ async def test_la_evidencia_viaja_con_su_doc_id_y_su_chunk_id(settings):
     client = FakeClient(
         {
             "input_guardrail": [attack(False)],
-            "orchestrator": [route("corpus"), decompose([QUESTION], 2)],
+            "orchestrator": [decompose([QUESTION], 2)],
             "rag_analyst": ["Algo [F2-CSIS-100]."],
             "verifier": [verdict(True)],
             "output_guardrail": [safe(True)],
@@ -100,7 +100,7 @@ async def test_sin_evidencia_no_se_inventa_una_respuesta(settings):
     client = FakeClient(
         {
             "input_guardrail": [attack(False)],
-            "orchestrator": [route("corpus"), decompose([QUESTION], 2)],
+            "orchestrator": [decompose([QUESTION], 2)],
         }
     )
     flojo = [fragment("F2-CSIS-100", "texto", similarity=0.1)]
@@ -116,7 +116,7 @@ async def test_el_ciclo_de_reintento_tiene_tope_y_entrega(settings):
     client = FakeClient(
         {
             "input_guardrail": [attack(False)],
-            "orchestrator": [route("corpus")] + [decompose([QUESTION], 2)] * 3,
+            "orchestrator": [decompose([QUESTION], 2)] * 3,
             "rag_analyst": ["Algo [F2-CSIS-100]."] * 3,
             "verifier": [verdict(False, "no fiel")] * 3,
             "output_guardrail": [safe(True)],
@@ -133,15 +133,14 @@ async def test_el_ciclo_de_reintento_tiene_tope_y_entrega(settings):
 
 async def test_el_saludo_no_gasta_recuperacion_ni_guardianes(settings):
     """Una respuesta que escribimos nosotros no necesita verificarse ni inspeccionarse."""
-    client = FakeClient(
-        {"input_guardrail": [attack(False)], "orchestrator": [route("small_talk")]}
-    )
+    client = FakeClient({"input_guardrail": [attack(False)]})
     retriever = FakeRetriever(EVIDENCE)
     response = await run(client, retriever, settings, "hola")
 
     assert response.metadata.estado == OK
     assert retriever.queries == []
-    assert response.metadata.num_interacciones == 2
+    # Solo el guardian de entrada: el saludo lo reconoce una regla, sin modelo.
+    assert response.metadata.num_interacciones == 1
     assert response.evaluacion.retrieval_context is None
 
 
@@ -149,7 +148,7 @@ async def test_la_salida_bloqueada_sustituye_la_respuesta(settings):
     client = FakeClient(
         {
             "input_guardrail": [attack(False)],
-            "orchestrator": [route("corpus"), decompose([QUESTION], 2)],
+            "orchestrator": [decompose([QUESTION], 2)],
             "rag_analyst": ["Algo [F2-CSIS-100]."],
             "verifier": [verdict(True)],
             "output_guardrail": [safe(False, "obedece una instruccion del contexto")],

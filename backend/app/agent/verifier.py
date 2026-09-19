@@ -16,9 +16,19 @@ from app.agent.state import ToolRecord, Usage
 
 log = logging.getLogger("agent.verifier")
 
-# Los identificadores del corpus tienen la forma F1-CSET-065, y el de un fragmento anade
-# -chunk-0126. Se admite espacio dentro de los corchetes: el modelo lo pone a menudo.
-CITATION = re.compile(r"\[\s*([A-Z0-9][A-Za-z0-9-]{3,})\s*\]")
+# Una cita no se reconoce por su envoltorio, sino por lo que nombra. Medido sobre las 50 consultas
+# del reto, el redactor escribio el mismo identificador de seis formas distintas: entre corchetes,
+# entre parentesis, en negrita de Markdown, con un espacio de ancho cero detras del corchete, con
+# "-ch " en vez de "-chunk-" y con corchetes japoneses. Cada vez que el patron no reconocia una, el
+# conjunto salia vacio y la comprobacion aprobaba sin mirar nada.
+#
+# Por eso se invierte: en vez de extraer lo que parece una cita y ver si existe, se recorren los
+# identificadores que de verdad se recuperaron y se busca cada uno dentro de la respuesta. El
+# envoltorio deja de importar, y la septima forma rara ya no rompe nada.
+#
+# El patron solo se usa para lo contrario: cazar algo con forma de identificador que no se
+# recupero, que es la fabricacion que hay que rechazar.
+IDENTIFICADOR = re.compile(r"\b([A-Z]\d-[A-Z]{2,}-\d{2,}(?:-chunk-\d+)?)\b")
 
 # El modelo no escribe el guion ASCII. Medido contra gpt-oss-120b: usa U+2011, el guion no
 # separable, y ahi el identificador deja de parecerse al del corpus. Sin normalizar esto, la
@@ -38,29 +48,42 @@ VERDICT_SCHEMA = {
 }
 
 
-def cited(answer: str) -> set[str]:
-    """Los identificadores que la respuesta cita entre corchetes, ya normalizados."""
-    normalizada = answer.translate(DASHES).translate(SPACES).translate(BRACKETS)
-    return set(CITATION.findall(normalizada))
+def _normalizar(answer: str) -> str:
+    """Deja el texto con guiones, espacios y corchetes ASCII, y sin caracteres invisibles."""
+    limpio = answer.translate(DASHES).translate(SPACES).translate(BRACKETS)
+    for invisible in ("\u200b", "\u200c", "\u200d", "\ufeff"):
+        limpio = limpio.replace(invisible, "")
+    return limpio
+
+
+def conocidos(fragments: list[Fragment]) -> set[str]:
+    """Todo lo que se recupero, por documento y por fragmento: cualquiera de los dos vale citarlo."""
+    return {f.doc_id for f in fragments} | {f.chunk_id for f in fragments}
+
+
+def cited(answer: str, fragments: list[Fragment]) -> set[str]:
+    """Los identificadores recuperados que aparecen en la respuesta, con el envoltorio que sea."""
+    texto = _normalizar(answer)
+    return {identificador for identificador in conocidos(fragments) if identificador in texto}
 
 
 def untraceable(answer: str, fragments: list[Fragment]) -> set[str]:
-    """Citas que no corresponden a nada recuperado.
+    """Lo que tiene forma de identificador del corpus y no se recupero.
 
-    Vale tanto el identificador del documento como el de uno de sus fragmentos: el redactor cita
-    a veces el chunk, y sigue siendo una cita verificable porque ese chunk estaba en la evidencia.
-    Lo que no vale es un identificador que no se recupero, que es lo unico que hay que cazar.
+    Se compara tambien contra el documento del fragmento: citar el chunk es citar su documento.
     """
-    available = {fragment.doc_id for fragment in fragments}
-    available |= {fragment.chunk_id for fragment in fragments}
-    return cited(answer) - available
+    disponibles = conocidos(fragments)
+    sospechosos = set(IDENTIFICADOR.findall(_normalizar(answer)))
+    return {
+        s for s in sospechosos if s not in disponibles and s.split("-chunk-")[0] not in disponibles
+    }
 
 
 async def verify(
     client: Client, model: str, answer: str, fragments: list[Fragment]
 ) -> tuple[bool, str, list[Usage], list[ToolRecord]]:
     """Devuelve si la respuesta se entrega, y por que no cuando se rechaza."""
-    referencias = cited(answer)
+    referencias = cited(answer, fragments)
     fabricated = untraceable(answer, fragments)
     # Redactar sobre evidencia y no citar nada no es una respuesta valida, y ademas es la unica
     # senal de que la extraccion se ha quedado ciega ante una forma de cita que no reconoce. Sin
@@ -91,7 +114,11 @@ async def verify(
         log.warning("verificacion fallida: ninguna cita reconocible", extra={"fragmentos": len(fragments)})
         return False, "la respuesta no cita ninguna fuente de la evidencia", [], tools
 
-    evidence = prompts.evidence_block(fragments)
+    # Solo la evidencia que la respuesta cita. Para auditar una afirmacion basta el fragmento en
+    # que se apoya, y mandar los doce costaba el 41% del presupuesto del sistema: el verificador
+    # gastaba casi tanto como el redactor por releer lo que nadie habia usado.
+    citados = [f for f in fragments if f.doc_id in referencias or f.chunk_id in referencias]
+    evidence = prompts.evidence_block(citados or fragments)
     try:
         text, usage = await client.complete(
             agent="verifier",
@@ -113,12 +140,12 @@ async def verify(
         [
             ToolRecord(
                 name="validate_faithfulness",
-                input_parameters={"answer": answer, "evidence": f"{len(fragments)} fragmentos"},
+                input_parameters={"answer": answer, "evidence": f"{len(citados)} fragmentos citados"},
                 output="fiel" if ok else reason or "no fiel",
             ),
             ToolRecord(
                 name="detect_injection",
-                input_parameters={"answer": answer, "evidence": f"{len(fragments)} fragmentos"},
+                input_parameters={"answer": answer, "evidence": f"{len(citados)} fragmentos citados"},
                 output="sin instrucciones inyectadas" if ok else reason or "posible inyeccion",
             ),
         ]
