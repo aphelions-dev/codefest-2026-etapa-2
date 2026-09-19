@@ -1,7 +1,16 @@
 "use client";
 
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Area,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
@@ -28,17 +37,38 @@ export function TimelineStrip({
   readonly open: boolean;
   readonly onToggle: () => void;
 }) {
+  // La serie del filtro, siempre. Con una entidad seleccionada, además la suya: superpuestas se ve
+  // si la entidad reaparece a lo largo del corpus o si fue cosa de un solo año, que es lo que el
+  // anexo pide distinguir. Son dos peticiones al mismo endpoint agregado, sin coste de modelo.
   const { data, error, loading } = useApi<TimelineData>("/timeline", {
+    phenomenon: phenomenon ?? undefined,
+  });
+  const { data: focused } = useApi<TimelineData>(entity ? "/timeline" : null, {
     phenomenon: phenomenon ?? undefined,
     entity,
   });
   const color = phenomenonColor(phenomenon);
   const empty = data !== null && data.points.length === 0;
 
+  // Un punto por año con las dos cifras: el total del filtro y, si la hay, la de la entidad.
+  const byYear = new Map((focused?.points ?? []).map((point) => [point.year, point.documents]));
+  const series = (data?.points ?? []).map((point) => ({
+    year: point.year,
+    documents: point.documents,
+    entity: byYear.get(point.year) ?? 0,
+  }));
+  const appearances = (focused?.points ?? []).filter((point) => point.documents > 0).length;
+
   return (
     <section className={cn(GLASS, "border-border/60 border-t")}>
       <header className="flex items-center gap-2 px-3 py-1.5">
         <h2 className="text-[12px] font-medium">Documentos publicados por año</h2>
+        {entity && focused ? (
+          <span className="text-primary shrink-0 text-[11px]">
+            · {entity.replaceAll("-", " ")} reaparece en {appearances}{" "}
+            {appearances === 1 ? "año" : "años"}
+          </span>
+        ) : null}
         {data ? (
           <span className="text-muted-foreground min-w-0 truncate text-[11px]">
             {empty
@@ -67,7 +97,7 @@ export function TimelineStrip({
             </p>
           ) : (
             <ResponsiveContainer height="100%" width="100%">
-              <AreaChart data={data.points} margin={{ left: 0, right: 8, top: 6, bottom: 0 }}>
+              <ComposedChart data={series} margin={{ left: 0, right: 8, top: 6, bottom: 0 }}>
                 <CartesianGrid stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="year" stroke="var(--muted-foreground)" tick={{ fontSize: 11 }} />
                 <YAxis stroke="var(--muted-foreground)" tick={{ fontSize: 11 }} width={34} />
@@ -78,10 +108,32 @@ export function TimelineStrip({
                     borderRadius: 8,
                     fontSize: 12,
                   }}
-                  formatter={(value) => [Number(value).toLocaleString("es"), "documentos"] as [string, string]}
+                  formatter={(value, name) =>
+                    [
+                      Number(value).toLocaleString("es"),
+                      name === "entity" ? "de la entidad" : "documentos",
+                    ] as [string, string]
+                  }
                 />
-                <Area dataKey="documents" fill={color} fillOpacity={0.22} stroke={color} type="monotone" />
-              </AreaChart>
+                <Area
+                  dataKey="documents"
+                  fill={color}
+                  fillOpacity={entity ? 0.1 : 0.22}
+                  stroke={color}
+                  strokeOpacity={entity ? 0.35 : 1}
+                  type="monotone"
+                />
+                {/* Los puntos marcan cada año en que la entidad reaparece en el corpus. */}
+                {entity ? (
+                  <Line
+                    dataKey="entity"
+                    dot={{ r: 3, fill: "var(--primary)" }}
+                    stroke="var(--primary)"
+                    strokeWidth={2}
+                    type="monotone"
+                  />
+                ) : null}
+              </ComposedChart>
             </ResponsiveContainer>
           )}
         </div>

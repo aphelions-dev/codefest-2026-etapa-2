@@ -23,13 +23,17 @@ const CHAT_WIDTH = 384;
 const NARROW = 1280;
 
 /**
- * Lo que el radar muestra mientras el analista no ha pedido nada: una vista por cada capacidad que
- * el anexo enumera. El mapa no está en la lista porque es el lienzo, siempre presente.
+ * Lo que el radar muestra mientras el analista no ha pedido nada.
+ *
+ * No están todos los componentes: la especificación pide expresamente que el tablero no los muestre
+ * a la vez. El mapa y la línea de tiempo ya cubren lo espacial y lo temporal por estar siempre
+ * presentes; estos dos abren la comparación cruzada y la priorización, y el resto los activa el
+ * agente cuando la pregunta los pide.
  */
 const DEFAULT_VIEW: readonly Activation[] = [
   { tool: "get_entity_matrix", filters: { cols: "observatory" } },
-  { tool: "get_cooccurrence" },
   { tool: "get_quadrant" },
+  { tool: "get_cooccurrence" },
 ];
 
 // Estos dos no son tarjetas de la barra: el mapa es el lienzo y la serie temporal, la franja.
