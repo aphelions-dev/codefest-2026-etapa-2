@@ -1,7 +1,7 @@
 "use client";
 
 import type { ExpressionSpecification } from "maplibre-gl";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { MapGeoJSON, useMap } from "@/components/ui/map";
 
@@ -41,15 +41,11 @@ export function ChoroplethLayer<P extends GeoJSON.GeoJsonProperties>(
   props: Omit<Parameters<typeof MapGeoJSON<P>>[0], "beforeId">,
 ) {
   const { map, isLoaded } = useMap();
-  const [beforeId, setBeforeId] = useState<string | undefined>();
-
-  useEffect(() => {
-    if (!map || !isLoaded) return;
-    const overlay = map
-      .getStyle()
-      .layers.find((layer) => layer.type === "symbol" || layer.id.startsWith("boundary"));
-    setBeforeId(overlay?.id);
-  }, [map, isLoaded]);
+  // La primera capa de rótulos o fronteras del estilo: el coroplético va debajo para no taparlas.
+  const beforeId =
+    map && isLoaded
+      ? map.getStyle().layers.find((layer) => layer.type === "symbol" || layer.id.startsWith("boundary"))?.id
+      : undefined;
 
   return <MapGeoJSON {...props} beforeId={beforeId} />;
 }

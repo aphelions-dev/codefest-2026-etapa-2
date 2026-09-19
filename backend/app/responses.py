@@ -1,4 +1,3 @@
-import json
 from datetime import date
 
 """Modelos de respuesta. Son la unica fuente del contrato: los tipos del frontend se generan de

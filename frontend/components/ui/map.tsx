@@ -13,6 +13,7 @@ import {
   useEffect,
   useId,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -273,7 +274,9 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
   const isControlled = viewport !== undefined && onViewportChange !== undefined;
 
   const onViewportChangeRef = useRef(onViewportChange);
-  onViewportChangeRef.current = onViewportChange;
+  useLayoutEffect(() => {
+    onViewportChangeRef.current = onViewportChange;
+  });
 
   const stableStyles = useStableValue(styles);
 
@@ -389,6 +392,8 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
   useEffect(() => {
     if (!mapInstance || !pendingStyle) return;
 
+    // Sincroniza con MapLibre, un sistema externo: el cambio de estilo se aplica aquí y se limpia.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPendingStyle(null);
     styleSwapInFlightRef.current = true;
     // Full reload (no diff) so `style.load` fires deterministically. A
@@ -485,14 +490,16 @@ function MapMarker({
     onDrag,
     onDragEnd,
   });
-  callbacksRef.current = {
-    onClick,
-    onMouseEnter,
-    onMouseLeave,
-    onDragStart,
-    onDrag,
-    onDragEnd,
-  };
+  useLayoutEffect(() => {
+    callbacksRef.current = {
+      onClick,
+      onMouseEnter,
+      onMouseLeave,
+      onDragStart,
+      onDrag,
+      onDragEnd,
+    };
+  });
 
   const marker = useMemo(() => {
     const markerInstance = new MapLibreGL.Marker({
@@ -501,19 +508,25 @@ function MapMarker({
       draggable,
     }).setLngLat([longitude, latitude]);
 
+    return markerInstance;
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Los manejadores se enganchan en un efecto y no al crear el marcador: leen la referencia al
+  // dispararse, nunca durante el render.
+  useEffect(() => {
+    const markerInstance = marker;
+    const element = markerInstance.getElement();
     const handleClick = (e: MouseEvent) => callbacksRef.current.onClick?.(e);
     const handleMouseEnter = (e: MouseEvent) =>
       callbacksRef.current.onMouseEnter?.(e);
     const handleMouseLeave = (e: MouseEvent) =>
       callbacksRef.current.onMouseLeave?.(e);
 
-    markerInstance.getElement()?.addEventListener("click", handleClick);
-    markerInstance
-      .getElement()
-      ?.addEventListener("mouseenter", handleMouseEnter);
-    markerInstance
-      .getElement()
-      ?.addEventListener("mouseleave", handleMouseLeave);
+    element?.addEventListener("click", handleClick);
+    element?.addEventListener("mouseenter", handleMouseEnter);
+    element?.addEventListener("mouseleave", handleMouseLeave);
 
     const handleDragStart = () => {
       const lngLat = markerInstance.getLngLat();
@@ -532,10 +545,15 @@ function MapMarker({
     markerInstance.on("drag", handleDrag);
     markerInstance.on("dragend", handleDragEnd);
 
-    return markerInstance;
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      element?.removeEventListener("click", handleClick);
+      element?.removeEventListener("mouseenter", handleMouseEnter);
+      element?.removeEventListener("mouseleave", handleMouseLeave);
+      markerInstance.off("dragstart", handleDragStart);
+      markerInstance.off("drag", handleDrag);
+      markerInstance.off("dragend", handleDragEnd);
+    };
+  }, [marker]);
 
   useEffect(() => {
     if (!map) return;
@@ -1047,7 +1065,9 @@ function MapPopup({
 }: MapPopupProps) {
   const { map } = useMap();
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useLayoutEffect(() => {
+    onCloseRef.current = onClose;
+  });
   const container = useMemo(() => document.createElement("div"), []);
   const { offset, maxWidth } = popupOptions;
 
@@ -1408,7 +1428,9 @@ function MapRoute({
     );
 
     // Children add their layers once this is set, which keeps them above the
-    // base line: child effects would otherwise run before this one.
+    // base line: child effects would otherwise run before this one. Es el aviso de que MapLibre, un
+    // sistema externo, ya tiene la capa.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setReady(true);
 
     return () => {
@@ -1840,7 +1862,9 @@ function MapGeoJSON<
     [defaults.line, linePaint],
   );
   const latestRef = useRef({ onClick, onHover });
-  latestRef.current = { onClick, onHover };
+  useLayoutEffect(() => {
+    latestRef.current = { onClick, onHover };
+  });
 
   // Add source on mount.
   useEffect(() => {
@@ -2191,7 +2215,9 @@ function MapArc<T extends MapArcDatum = MapArcDatum>({
   );
 
   const latestRef = useRef({ data, onClick, onHover });
-  latestRef.current = { data, onClick, onHover };
+  useLayoutEffect(() => {
+    latestRef.current = { data, onClick, onHover };
+  });
 
   // Add source and layers on mount.
   useEffect(() => {

@@ -12,7 +12,7 @@ import {
 } from "@/components/ai-elements/chain-of-thought";
 import { DocumentLink } from "@/components/document-view";
 import { PHENOMENON_DOT } from "@/lib/filters";
-import { TOOLS, type ToolName } from "@/components/registry";
+import { TOOLS } from "@/components/registry";
 import type { Step } from "@/lib/agent";
 import { cn } from "@/lib/utils";
 

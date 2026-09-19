@@ -39,6 +39,7 @@ const ShimmerComponent = ({
   duration = 2,
   spread = 2,
 }: TextShimmerProps) => {
+  // El componente sale de una caché de módulo, así que es el mismo en cada render.
   const MotionComponent = getMotionComponent(
     Component as keyof JSX.IntrinsicElements
   );
@@ -49,6 +50,7 @@ const ShimmerComponent = ({
   );
 
   return (
+    // eslint-disable-next-line react-hooks/static-components -- viene de la caché de módulo de arriba
     <MotionComponent
       animate={{ backgroundPosition: "0% center" }}
       className={cn(

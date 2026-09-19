@@ -5,19 +5,20 @@ permiten volver al fragmento de origen.
 """
 
 import json
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
 from app.db import alerts as alerts_db
 from app.db import breakdown as breakdown_db
 from app.db import distribution as distribution_db
+from app.db import documents as documents_db
 from app.db import entities as entities_db
 from app.db import places as places_db
 from app.db import presence as presence_db
 from app.db import quadrant as quadrant_db
 from app.db import territory as territory_db
 from app.db import timeline as timeline_db
-from app.db import documents as documents_db
 from app.db.pool import Pool
 from app.params import (
     BreakdownField,
@@ -36,6 +37,7 @@ from app.responses import (
     AlertProperties,
     Alerts,
     AlertYear,
+    ArmedGroup,
     Breakdown,
     BreakdownBucket,
     Distribution,
@@ -48,16 +50,15 @@ from app.responses import (
     Matrix,
     MatrixCell,
     MatrixRow,
-    PlaceFeature,
-    PlaceProperties,
-    ArmedGroup,
     Municipality,
     MunicipalityFeature,
+    PlaceFeature,
+    PlaceFragment,
+    PlaceProperties,
     Places,
     Presence,
     PresenceFeature,
     PresenceProperties,
-    PlaceFragment,
     Quadrant,
     QuadrantPoint,
     Territory,
@@ -73,8 +74,8 @@ router = APIRouter(tags=["aggregate"])
 @router.get("/metadata/breakdown", summary="Conteos por un campo de la metadata")
 async def metadata_breakdown(
     pool: Pool,
-    by: BreakdownField = Query(description="Campo por el que agrupar"),
-    phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+    by: Annotated[BreakdownField, Query(description="Campo por el que agrupar")],
+    phenomenon: Annotated[Phenomenon | None, Query(description="Limitar a un fenomeno")] = None,
     date_from: DateFrom = None,
     date_to: DateTo = None,
 ) -> Breakdown:
@@ -101,10 +102,10 @@ async def metadata_breakdown(
 @router.get("/metadata/distribution", summary="Distribucion de una medida por documento")
 async def metadata_distribution(
     pool: Pool,
-    measure: DistributionMeasure = Query(
-        default=DistributionMeasure.fragments, description="Que se mide de cada documento"
-    ),
-    phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+    measure: Annotated[
+        DistributionMeasure, Query(description="Que se mide de cada documento")
+    ] = DistributionMeasure.fragments,
+    phenomenon: Annotated[Phenomenon | None, Query(description="Limitar a un fenomeno")] = None,
     date_from: DateFrom = None,
     date_to: DateTo = None,
 ) -> Distribution:
@@ -214,8 +215,8 @@ async def document(
 @router.get("/entities/matrix", summary="Matriz de calor de entidades")
 async def entity_matrix(
     pool: Pool,
-    cols: MatrixColumn = Query(default=MatrixColumn.observatory, description="Segunda categoria"),
-    phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+    cols: Annotated[MatrixColumn, Query(description="Segunda categoria")] = MatrixColumn.observatory,
+    phenomenon: Annotated[Phenomenon | None, Query(description="Limitar a un fenomeno")] = None,
     date_from: DateFrom = None,
     date_to: DateTo = None,
 ) -> Matrix:
@@ -249,7 +250,7 @@ async def entity_matrix(
 async def entity_cooccurrence(
     pool: Pool,
     entity: str | None = Query(default=None, description="Centrar la red en una entidad"),
-    phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+    phenomenon: Annotated[Phenomenon | None, Query(description="Limitar a un fenomeno")] = None,
     min_documents: int = Query(default=3, ge=1, le=100, description="Documentos compartidos minimos"),
     date_from: DateFrom = None,
     date_to: DateTo = None,
@@ -287,8 +288,8 @@ async def entity_cooccurrence(
 @router.get("/places", summary="Lugares nombrados en el corpus")
 async def places(
     pool: Pool,
-    level: PlaceLevel = Query(default=PlaceLevel.country, description="Nivel territorial"),
-    phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+    level: Annotated[PlaceLevel, Query(description="Nivel territorial")] = PlaceLevel.country,
+    phenomenon: Annotated[Phenomenon | None, Query(description="Limitar a un fenomeno")] = None,
     limit: int = Query(default=80, ge=1, le=250, description="Cuantos lugares devolver"),
     entity: str | None = Query(default=None, description="Solo documentos que nombran la entidad"),
     date_from: DateFrom = None,
@@ -324,7 +325,7 @@ async def places(
 @router.get("/timeline", summary="Documentos por ano")
 async def timeline(
     pool: Pool,
-    phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+    phenomenon: Annotated[Phenomenon | None, Query(description="Limitar a un fenomeno")] = None,
     entity: str | None = Query(default=None, description="Solo documentos que nombran la entidad"),
 ) -> Timeline:
     """Alimenta la linea de tiempo. Sin fechas precomputadas la serie sale vacia a proposito:
@@ -353,7 +354,7 @@ async def timeline(
 @router.get("/entities/quadrant", summary="Cuadrante de priorizacion de entidades")
 async def entity_quadrant(
     pool: Pool,
-    phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+    phenomenon: Annotated[Phenomenon | None, Query(description="Limitar a un fenomeno")] = None,
 ) -> Quadrant:
     """Intensidad contra tendencia: a que entidades mirar primero, sin puntuar ninguna.
 
@@ -563,7 +564,7 @@ async def alerts(
 async def territory(
     pool: Pool,
     place_id: str = Path(pattern=r"^[A-Z]{3}$|^CO-[A-Z]{2,3}$", description="Pais o departamento"),
-    phenomenon: Phenomenon | None = Query(default=None, description="Limitar a un fenomeno"),
+    phenomenon: Annotated[Phenomenon | None, Query(description="Limitar a un fenomeno")] = None,
     group: str | None = Query(default=None, description="Limitar los municipios a un grupo"),
     kind: str | None = Query(default=None, description="Limitar las alertas a una clase de riesgo"),
     limit: int = Query(default=12, ge=1, le=60, description="Cuantos fragmentos devolver"),

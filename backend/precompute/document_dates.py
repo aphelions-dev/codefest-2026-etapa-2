@@ -13,7 +13,7 @@ tiempo se puede auditar hasta el archivo que lo produjo.
 import asyncio
 import os
 import re
-from datetime import date
+from datetime import UTC, date, datetime
 
 import asyncpg
 
@@ -21,7 +21,7 @@ from app.db.schema import SCHEMA
 
 # El corpus no tiene nada anterior ni posterior a esto; fuera de rango es un falso positivo.
 MIN_YEAR = 1990
-MAX_YEAR = date.today().year
+MAX_YEAR = datetime.now(UTC).year
 
 # Alertas tempranas de la Defensoria: "ALERTAS_029-20-91742" es la alerta 29 del ano 2020.
 ALERT = re.compile(r"ALERTAS_(\d{3})-(\d{2})-")

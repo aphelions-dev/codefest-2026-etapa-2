@@ -57,7 +57,9 @@ export function Dashboard() {
   const [turns, setTurns] = useState<readonly Turn[]>([]);
   const [pending, setPending] = useState(false);
   const [activations, setActivations] = useState<readonly Activation[]>(DEFAULT_VIEW);
-  const [selected, setSelected] = useState<Selection | null>(null);
+  // Lo elegido va atado al conjunto de territorios en que se eligió: cambiar de nivel, fenómeno,
+  // entidad, capa o filtro cambia ese conjunto, y lo elegido deja de existir.
+  const [picked, setPicked] = useState<{ readonly context: string; readonly selection: Selection } | null>(null);
   // El análisis arranca cerrado: al entrar se ve el radar entero, y la píldora dice qué hay.
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(true);
@@ -71,6 +73,10 @@ export function Dashboard() {
 
   // La vista decide qué mide el mapa; la entidad seleccionada en cualquier componente lo reduce a
   // los documentos que la nombran.
+  const context = [level, phenomenon, entity, view, filter].join("|");
+  const selected = picked?.context === context ? picked.selection : null;
+  const setSelected = (selection: Selection | null) => setPicked(selection ? { context, selection } : null);
+
   const layer = useMapLayer(view, { phenomenon, level, entity, filter, period });
   // Lo que la ficha del mapa dice del periodo: cuál recorta la vista, o que esta no tiene fecha.
   const periodNote = !isActive(period)
@@ -95,8 +101,6 @@ export function Dashboard() {
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  // Cambiar de nivel o de fenómeno cambia el conjunto de territorios: lo elegido deja de existir.
-  useEffect(() => setSelected(null), [level, phenomenon, entity, view, filter]);
 
   const chatOpen = chatChoice ?? viewport >= NARROW;
   const sidebarOpen = sidebarChoice ?? viewport >= NARROW;

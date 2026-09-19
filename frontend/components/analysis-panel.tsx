@@ -1,7 +1,7 @@
 "use client";
 
 import { LayoutGridIcon, XIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
@@ -48,12 +48,14 @@ export function AnalysisPanel({
   readonly rightInset: number;
   readonly bottomInset: number;
 }) {
-  const [active, setActive] = useState(0);
+  // La pestaña elegida va atada a los componentes entre los que se eligió: cuando el agente activa
+  // otros, se muestra el primero de los nuevos.
+  const [chosen, setChosen] = useState<{ readonly key: string; readonly index: number } | null>(null);
   const [period] = usePeriod();
 
-  // Cuando el agente activa otros componentes, se muestra el primero de los nuevos.
   const key = activations.map((activation) => activation.tool).join(",");
-  useEffect(() => setActive(0), [key]);
+  const active = chosen?.key === key ? chosen.index : 0;
+  const setActive = (index: number) => setChosen({ key, index });
 
   if (activations.length === 0) return null;
   const index = Math.min(active, activations.length - 1);
