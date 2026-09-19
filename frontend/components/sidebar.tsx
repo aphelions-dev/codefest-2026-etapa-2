@@ -375,7 +375,12 @@ const segment = (active: boolean) =>
 /** Países o departamentos: solo los documentos cambian de nivel, las otras capas miden en el suyo. */
 function LevelSwitch({ level, onLevel }: { readonly level: MapLevel; readonly onLevel: (level: MapLevel) => void }) {
   return (
-    <div aria-label="Nivel territorial" className="bg-muted/40 flex gap-0.5 rounded-md p-0.5" role="group">
+    <div
+      aria-label="Nivel territorial"
+      className="bg-muted/40 flex gap-0.5 rounded-md p-0.5"
+      role="group"
+      title="También cambia solo con el zoom: acercarse a Colombia muestra sus departamentos"
+    >
       <button aria-pressed={level === "country"} className={segment(level === "country")} onClick={() => onLevel("country")} title="Países del mundo" type="button">
         <GlobeIcon className="size-3.5" />
         Países

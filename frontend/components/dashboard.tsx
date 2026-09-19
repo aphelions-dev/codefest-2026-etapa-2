@@ -169,6 +169,7 @@ export function Dashboard() {
         leftInset={sidebarWidth}
         level={level}
         loading={layer.loading}
+        onLevel={setLevel}
         onSelect={setSelected}
         periodNote={periodNote}
         phenomenon={phenomenon}
