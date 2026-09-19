@@ -5,6 +5,7 @@ import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import type { Alerts, Places, Presence } from "@/lib/api";
 import { formatNumber } from "@/lib/format";
 import type { MapLevel } from "@/lib/filters";
+import { type Period, periodParams } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
 
 /**
@@ -89,6 +90,8 @@ type Layer = {
   readonly coverage: string;
   /** Si el filtro global por entidad recorta esta vista: no todas salen del corpus. */
   readonly entityApplies: boolean;
+  /** Si el periodo la recorta: la presencia armada no trae fecha. */
+  readonly periodApplies: boolean;
   readonly loading: boolean;
   readonly error: string | null;
 };
@@ -113,22 +116,27 @@ export function useMapLayer(
     level,
     entity,
     filter,
+    period,
   }: {
     phenomenon: number | null;
     level: MapLevel;
     entity: string | null;
     filter: string | null;
+    period: Period;
   },
 ): Layer {
+  const dated = periodParams(period);
   const places = useApi<Places>(view === "documentos" ? "/places" : null, {
     level,
     phenomenon: phenomenon ?? undefined,
     entity: entity ?? undefined,
     limit: level === "department" ? 40 : 90,
+    ...dated,
   });
   const alerts = useApi<Alerts>(view === "alertas" ? "/alerts" : null, {
     kind: filter ?? undefined,
     entity: entity ?? undefined,
+    ...dated,
   });
   const presence = useApi<Presence>(view === "grupos" ? "/presence" : null, {
     group: filter ?? undefined,
@@ -175,6 +183,7 @@ export function useMapLayer(
         : "",
       // El filtro por entidad recorta las alertas, porque una alerta es un documento del corpus.
       entityApplies: true,
+      periodApplies: true,
       loading: alerts.loading,
       error: alerts.error,
     };
@@ -225,8 +234,10 @@ export function useMapLayer(
         ? `${formatNumber(presence.data.with_presence)} municipios con presencia y ${formatNumber(presence.data.without_information)} sin investigar, de ${formatNumber(presence.data.municipalities)}`
         : "",
       // La presencia no sale del corpus sino de Amazon Underworld, así que filtrar por una entidad
-      // del corpus no la recorta. Se declara en vez de ignorarlo en silencio.
+      // del corpus no la recorta, y tampoco el periodo: la fuente no fecha la presencia. Se declara
+      // en vez de ignorarlo en silencio.
       entityApplies: false,
+      periodApplies: false,
       loading: presence.loading,
       error: presence.error,
     };
@@ -260,6 +271,7 @@ export function useMapLayer(
     options: [],
     coverage: "",
     entityApplies: true,
+    periodApplies: true,
     loading: places.loading,
     error: places.error,
   };

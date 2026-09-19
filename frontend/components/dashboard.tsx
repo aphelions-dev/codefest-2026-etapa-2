@@ -12,6 +12,7 @@ import { SIDEBAR_OPEN, SIDEBAR_RAIL, Sidebar } from "@/components/sidebar";
 import { TimelineStrip } from "@/components/timeline-strip";
 import { AgentUnavailable, ask } from "@/lib/agent";
 import { useEntity, useMapLevel, usePhenomenon } from "@/lib/filters";
+import { usePeriod } from "@/lib/period";
 import {
   type MapDatum,
   type MapView,
@@ -50,11 +51,13 @@ export function Dashboard() {
   const [entity, setEntity] = useEntity();
   const [view, setView] = useMapView();
   const [filter, setFilter] = useLayerFilter();
+  const [period] = usePeriod();
   const [turns, setTurns] = useState<readonly Turn[]>([]);
   const [pending, setPending] = useState(false);
   const [activations, setActivations] = useState<readonly Activation[]>(DEFAULT_VIEW);
   const [selected, setSelected] = useState<Selection | null>(null);
-  const [analysisOpen, setAnalysisOpen] = useState(true);
+  // El análisis arranca cerrado: al entrar se ve el radar entero, y la píldora dice qué hay.
+  const [analysisOpen, setAnalysisOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(true);
   const [chatChoice, setChatChoice] = useState<boolean | null>(null);
   const [sidebarChoice, setSidebarChoice] = useState<boolean | null>(null);
@@ -66,7 +69,7 @@ export function Dashboard() {
 
   // La vista decide qué mide el mapa; la entidad seleccionada en cualquier componente lo reduce a
   // los documentos que la nombran.
-  const layer = useMapLayer(view, { phenomenon, level, entity, filter });
+  const layer = useMapLayer(view, { phenomenon, level, entity, filter, period });
   const breaks = quantileBreaks(layer.data.map((datum) => datum.value));
 
   useEffect(() => {
@@ -167,20 +170,19 @@ export function Dashboard() {
       />
 
       <AnalysisPanel
-        activations={analysisOpen ? columnPanels : []}
+        activations={columnPanels}
         bottomInset={timelineSpace}
         entity={entity}
         entityNote={layer.entityApplies ? undefined : "no alcanza al mapa"}
-        onEntity={setEntity}
         leftInset={sidebarWidth}
-        onClose={() => setAnalysisOpen(false)}
+        onEntity={setEntity}
+        onOpenChange={setAnalysisOpen}
+        open={analysisOpen}
         phenomenon={phenomenon}
         rightInset={chatWidth}
       />
 
       <Sidebar
-        analysisOpen={analysisOpen}
-        components={columnPanels.length}
         coverage={layer.coverage}
         detail={view === "grupos" ? null : (selected?.place.id ?? null)}
         filter={filter}
@@ -196,7 +198,6 @@ export function Dashboard() {
           setSelected(datum ? { place: datum, geometry: datum.geometry as GeoJSON.Geometry } : null)
         }
         onToggle={() => setSidebarChoice(!sidebarOpen)}
-        onToggleAnalysis={() => setAnalysisOpen((open) => !open)}
         open={sidebarOpen}
         phenomenon={phenomenon}
       />

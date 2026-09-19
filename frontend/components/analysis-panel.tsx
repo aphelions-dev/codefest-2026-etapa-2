@@ -1,25 +1,26 @@
 "use client";
 
-import { MaximizeIcon, XIcon } from "lucide-react";
+import { LayoutGridIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { IconButton } from "@/components/icon-button";
 import { GLASS } from "@/components/map/panel";
 import { type Activation, render, TOOLS } from "@/components/registry";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { PHENOMENA, PHENOMENON_STYLE } from "@/lib/filters";
+import { isActive, periodLabel, usePeriod } from "@/lib/period";
 import { cn } from "@/lib/utils";
 
 /**
- * Los componentes que el agente activó, en el hueco visible del mapa.
+ * Los componentes que el agente activó.
  *
- * **Uno a la vez, con pestañas.** Repartir el hueco entre dos o tres deja a cada gráfico en un
- * cuarto de pantalla, y ahí una matriz de calor no muestra ni una fila entera y una red se sale de
- * su caja: el componente deja de resolver la tarea que justifica su existencia. Con pestañas, el
- * que se está mirando ocupa todo el ancho disponible y los demás siguen a un clic.
+ * **Cerrados, son una píldora sobre el mapa**; abiertos, un diálogo grande. Encajarlos en el hueco
+ * del mapa dejaba a una matriz de calor sin una fila entera y a una red saliéndose de su caja: el
+ * componente dejaba de resolver la tarea que justifica su existencia. El diálogo ocupa todo menos
+ * el analista, que sigue a la vista y se puede usar: la pregunta y lo que activó se leen juntos.
  *
- * El botón de ampliar lleva el componente a pantalla completa, para examinarlo de cerca sin perder
- * el estado del tablero. Esc cierra: primero el filtro por entidad, luego la ampliación, luego el
- * panel.
+ * **Uno a la vez, con pestañas**: el que se mira tiene todo el espacio y los demás siguen a un clic.
+ * Cuando el agente responde con componentes, el diálogo se abre solo en el primero.
  */
 export function AnalysisPanel({
   activations,
@@ -27,10 +28,11 @@ export function AnalysisPanel({
   entity,
   onEntity,
   entityNote,
+  open,
+  onOpenChange,
   leftInset,
   rightInset,
   bottomInset,
-  onClose,
 }: {
   readonly activations: readonly Activation[];
   readonly phenomenon: number | null;
@@ -39,107 +41,141 @@ export function AnalysisPanel({
   readonly onEntity: (entityId: string | null) => void;
   /** Qué no alcanza el filtro por entidad, cuando la vista del mapa no sale del corpus. */
   readonly entityNote?: string;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  /** Lo que ocupan la barra, el analista y la franja temporal: la píldora va en el hueco. */
   readonly leftInset: number;
   readonly rightInset: number;
   readonly bottomInset: number;
-  readonly onClose: () => void;
 }) {
   const [active, setActive] = useState(0);
-  const [maximized, setMaximized] = useState(false);
+  const [period] = usePeriod();
 
   // Cuando el agente activa otros componentes, se muestra el primero de los nuevos.
   const key = activations.map((activation) => activation.tool).join(",");
   useEffect(() => setActive(0), [key]);
 
-  useEffect(() => {
-    const escape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (entity) onEntity(null);
-      else if (!maximized) onClose();
-    };
-    window.addEventListener("keydown", escape);
-    return () => window.removeEventListener("keydown", escape);
-  }, [onClose, entity, onEntity, maximized]);
-
   if (activations.length === 0) return null;
-  const current = activations[Math.min(active, activations.length - 1)];
+  const index = Math.min(active, activations.length - 1);
+  const current = activations[index];
+  const openAt = (at: number) => {
+    setActive(at);
+    onOpenChange(true);
+  };
 
   return (
     <>
-      <section
-        aria-label="Componentes activos"
-        className={cn(
-          GLASS,
-          "border-border/60 absolute top-3 z-10 flex flex-col gap-2 overflow-hidden rounded-xl border p-2 shadow-2xl shadow-black/50",
-          "transition-[left,right,bottom] duration-200",
-        )}
-        style={{ left: leftInset + 12, right: rightInset + 12, bottom: bottomInset + 12 }}
-      >
-        <header className="flex shrink-0 items-center gap-2 px-1">
-          {/* Una pestaña por componente, con la tarea analítica que resuelve: el anexo pide que no
-              haya que inferir para qué sirve lo que se está viendo. */}
-          <div aria-label="Componentes" className="flex min-w-0 flex-1 flex-wrap gap-1" role="tablist">
-            {activations.map((activation, index) => (
+      {/* Cerrado: una píldora en el hueco del mapa, sobre la franja temporal. */}
+      {!open ? (
+        <div
+          className="pointer-events-none absolute z-10 flex justify-center px-3 transition-[left,right,bottom] duration-200"
+          style={{ left: leftInset, right: rightInset, bottom: bottomInset + 12 }}
+        >
+          <nav
+            aria-label="Componentes activos"
+            className={cn(
+              GLASS,
+              "border-border/60 pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-full border p-1 shadow-xl shadow-black/40",
+            )}
+          >
+            <span className="text-muted-foreground flex shrink-0 items-center gap-1.5 pr-1 pl-2 text-[11px]">
+              <LayoutGridIcon className="text-primary size-3.5" />
+              Análisis
+            </span>
+            {activations.map((activation, at) => (
               <button
-                aria-selected={index === active}
-                className={cn(
-                  "border-border/60 rounded-full border px-2 py-0.5 text-[11px] transition-colors",
-                  index === active
-                    ? "border-primary/60 text-primary"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
+                className="hover:bg-muted text-foreground/90 shrink-0 rounded-full px-2.5 py-1 text-[11px] transition-colors"
                 key={activation.tool}
-                onClick={() => setActive(index)}
-                role="tab"
+                onClick={() => openAt(at)}
+                title={`Abrir ${TOOLS[activation.tool].label.toLowerCase()} · ${TOOLS[activation.tool].task}`}
                 type="button"
               >
                 {TOOLS[activation.tool].label}
-                <span className="opacity-60"> · {TOOLS[activation.tool].task}</span>
               </button>
             ))}
-          </div>
-
-          {/* El filtro activo, siempre visible y siempre reversible: sin esto, el tablero muestra
-              cifras reducidas sin decir por qué. */}
-          {entity ? (
-            <button
-              className="border-primary/50 text-primary hover:bg-primary/10 flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]"
-              onClick={() => onEntity(null)}
-              title={
-                entityNote
-                  ? `Quitar el filtro por entidad. ${entityNote}`
-                  : "Quitar el filtro por entidad"
-              }
-              type="button"
-            >
-              Filtrado por {entity.replaceAll("-", " ")}
-              {entityNote ? <span className="opacity-70">· {entityNote}</span> : null}
-              <XIcon className="size-3" />
-            </button>
-          ) : null}
-          <IconButton label="Ver a pantalla completa" onClick={() => setMaximized(true)}>
-            <MaximizeIcon className="size-4" />
-          </IconButton>
-          <IconButton label="Cerrar el análisis y ver el mapa (Esc)" onClick={onClose}>
-            <XIcon className="size-4" />
-          </IconButton>
-        </header>
-
-        <div className="min-h-0 flex-1 [&>section]:h-full">
-          {render(current, { phenomenon, entity, onEntity })}
+          </nav>
         </div>
-      </section>
+      ) : null}
 
-      {/* Ampliado: el mismo componente con todo el espacio, para examinarlo de cerca. */}
-      <Dialog onOpenChange={setMaximized} open={maximized}>
-        <DialogContent className="flex h-[92dvh] flex-col gap-3 p-4 sm:max-w-[94vw]">
-          <DialogHeader className="shrink-0 text-left">
-            <DialogTitle className="text-base">
-              {TOOLS[current.tool].label}
-              <span className="text-muted-foreground font-normal"> · {TOOLS[current.tool].task}</span>
-            </DialogTitle>
-          </DialogHeader>
-          <div className="min-h-0 flex-1 [&>section]:h-full [&>section]:border-0 [&>section]:bg-transparent [&>section]:p-0 [&>section]:shadow-none">
+      {/* Abierto: no modal, para que el analista siga respondiendo mientras se mira el componente. */}
+      <Dialog modal={false} onOpenChange={onOpenChange} open={open}>
+        <DialogContent
+          className="bg-popover/95 flex flex-col gap-0 overflow-hidden p-0 shadow-2xl shadow-black/60 backdrop-blur-xl"
+          onInteractOutside={(event) => event.preventDefault()}
+          showCloseButton={false}
+          style={{
+            top: 12,
+            bottom: 12,
+            left: 12,
+            right: rightInset + 12,
+            width: "auto",
+            maxWidth: "none",
+            translate: "none",
+          }}
+        >
+          <header className="border-border/60 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5">
+            <div className="min-w-0">
+              <DialogTitle className="text-sm">{TOOLS[current.tool].label}</DialogTitle>
+              <DialogDescription className="text-[11px]">{TOOLS[current.tool].task}</DialogDescription>
+            </div>
+
+            {/* Una pestaña por componente activo. */}
+            {activations.length > 1 ? (
+              <div aria-label="Componentes" className="bg-muted/50 flex gap-0.5 rounded-lg p-0.5" role="tablist">
+                {activations.map((activation, at) => (
+                  <button
+                    aria-selected={at === index}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-[11px] transition-colors",
+                      at === index
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    key={activation.tool}
+                    onClick={() => setActive(at)}
+                    role="tab"
+                    type="button"
+                  >
+                    {TOOLS[activation.tool].label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {/* Los filtros que recortan lo que se ve: sin ellos el componente enseña cifras reducidas
+                sin decir por qué. El de entidad se quita desde aquí. */}
+            <div className="ml-auto flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span
+                className={cn(
+                  "border-border/60 text-muted-foreground rounded-md border px-1.5 py-0.5",
+                  phenomenon ? PHENOMENON_STYLE[phenomenon] : null,
+                )}
+              >
+                {phenomenon ? `F${phenomenon} · ${PHENOMENA[phenomenon - 1].label}` : "Los tres fenómenos"}
+              </span>
+              {isActive(period) ? (
+                <span className="border-border/60 text-muted-foreground rounded-md border px-1.5 py-0.5 tabular-nums">
+                  {periodLabel(period)}
+                </span>
+              ) : null}
+              {entity ? (
+                <button
+                  className="border-primary/50 text-primary hover:bg-primary/10 flex items-center gap-1 rounded-md border px-1.5 py-0.5"
+                  onClick={() => onEntity(null)}
+                  title={entityNote ? `Quitar el filtro por entidad. ${entityNote}` : "Quitar el filtro por entidad"}
+                  type="button"
+                >
+                  {entity.replaceAll("-", " ")}
+                  <XIcon className="size-3" />
+                </button>
+              ) : null}
+              <IconButton label="Cerrar y volver al mapa (Esc)" onClick={() => onOpenChange(false)} size="icon-xs">
+                <XIcon />
+              </IconButton>
+            </div>
+          </header>
+
+          <div className="min-h-0 flex-1 p-4 [&>section]:h-full [&>section]:border-0 [&>section]:bg-transparent [&>section]:p-0 [&>section]:shadow-none [&>section]:backdrop-blur-none">
             {render(current, { phenomenon, entity, onEntity })}
           </div>
         </DialogContent>

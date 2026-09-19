@@ -3,6 +3,7 @@
 import { Panel, PanelState } from "@/components/charts/panel";
 import { useDocument } from "@/lib/use-document";
 import type { Matrix } from "@/lib/api";
+import { periodParams, usePeriod } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
 
 /** Escala secuencial para una variable numérica ordenada, sobre el fondo del tablero. */
@@ -29,9 +30,11 @@ export function Heatmap({
   readonly entity: string | null;
   readonly onEntity: (entityId: string | null) => void;
 }) {
+  const [period] = usePeriod();
   const { data, error, loading } = useApi<Matrix>("/entities/matrix", {
     cols,
     phenomenon: phenomenon ?? undefined,
+    ...periodParams(period),
   });
 
   const { open } = useDocument();

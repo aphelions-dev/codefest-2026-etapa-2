@@ -10,6 +10,7 @@ import { SectionHeader, ShowMore } from "@/components/map/panel";
 import type { Territory } from "@/lib/api";
 import { PHENOMENON_STYLE } from "@/lib/filters";
 import { formatNumber } from "@/lib/format";
+import { periodParams, usePeriod } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
 import { cn } from "@/lib/utils";
 
@@ -38,8 +39,10 @@ export function TerritoryDetail({
   readonly kind: string | null;
   readonly onBack: () => void;
 }) {
+  const [period] = usePeriod();
   const { data, error, loading } = useApi<Territory>(`/territories/${placeId}`, {
     phenomenon: phenomenon ?? undefined,
+    ...periodParams(period),
     group: group ?? undefined,
     kind: kind ?? undefined,
   });

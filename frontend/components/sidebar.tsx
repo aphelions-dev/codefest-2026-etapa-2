@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutGridIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, RadarIcon } from "lucide-react";
+import { PanelLeftCloseIcon, PanelLeftOpenIcon, RadarIcon } from "lucide-react";
 
 import { Flag } from "@/components/flag";
 import { IconButton } from "@/components/icon-button";
@@ -36,9 +36,6 @@ export function Sidebar({
   onToggle,
   phenomenon,
   onPhenomenon,
-  analysisOpen,
-  onToggleAnalysis,
-  components,
   level,
   view,
   onView,
@@ -55,10 +52,6 @@ export function Sidebar({
   readonly onToggle: () => void;
   readonly phenomenon: number | null;
   readonly onPhenomenon: (value: number | null) => void;
-  readonly analysisOpen: boolean;
-  readonly onToggleAnalysis: () => void;
-  /** Cuántos componentes activó el agente: el conmutador dice qué se recupera al abrirlo. */
-  readonly components: number;
   readonly level: MapLevel;
   readonly view: MapView;
   readonly onView: (view: MapView) => void;
@@ -95,15 +88,6 @@ export function Sidebar({
         <RadarIcon className="text-primary size-4 shrink-0" />
         {open ? (
           <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">Radar Estratégico</span>
-        ) : null}
-        {components > 0 ? (
-          <IconButton
-            aria-pressed={analysisOpen}
-            label={analysisOpen ? "Ver el mapa entero" : `Ver los ${components} componentes activos`}
-            onClick={onToggleAnalysis}
-          >
-            <LayoutGridIcon className={cn("size-4", analysisOpen && "text-primary")} />
-          </IconButton>
         ) : null}
         <IconButton label={open ? "Plegar la barra" : "Desplegar la barra"} onClick={onToggle}>
           {open ? <PanelLeftCloseIcon className="size-4" /> : <PanelLeftOpenIcon className="size-4" />}

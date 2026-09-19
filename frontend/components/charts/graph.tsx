@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Panel, PanelState } from "@/components/charts/panel";
 import type { Graph as GraphData } from "@/lib/api";
+import { periodParams, usePeriod } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
 import { useDocument } from "@/lib/use-document";
 
@@ -49,8 +50,10 @@ export function Graph({
   readonly entity: string | null;
   readonly onEntity: (entityId: string | null) => void;
 }) {
+  const [period] = usePeriod();
   const { data, error, loading } = useApi<GraphData>("/entities/cooccurrence", {
     phenomenon: phenomenon ?? undefined,
+    ...periodParams(period),
     min_documents: 4,
   });
   const { open } = useDocument();

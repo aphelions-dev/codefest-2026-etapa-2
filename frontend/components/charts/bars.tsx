@@ -5,6 +5,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { Panel, PanelState } from "@/components/charts/panel";
 import type { Breakdown } from "@/lib/api";
 import { phenomenonColor } from "@/lib/filters";
+import { periodParams, usePeriod } from "@/lib/period";
 import { useApi } from "@/lib/use-api";
 
 const FIELD_LABEL: Record<string, string> = {
@@ -16,9 +17,11 @@ const FIELD_LABEL: Record<string, string> = {
 
 /** Comparacion y composicion sobre la metadata. Barras porque la tarea es comparar cantidades. */
 export function Bars({ by, phenomenon }: { readonly by: string; readonly phenomenon: number | null }) {
+  const [period] = usePeriod();
   const { data, error, loading } = useApi<Breakdown>("/metadata/breakdown", {
     by,
     phenomenon: phenomenon ?? undefined,
+    ...periodParams(period),
   });
 
   return (
