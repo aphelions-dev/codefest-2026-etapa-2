@@ -11,6 +11,10 @@ cada afirmación trazable a su fragmento de origen.
 El diseño del sistema y el porqué de cada decisión están en
 **[`docs/arquitectura.md`](docs/arquitectura.md)**.
 
+![Diagrama de arquitectura del sistema multiagente, con las barreras de seguridad de entrada y salida](docs/img/diagrama-arquitectura.png)
+
+El diagrama también está en [PDF](docs/img/diagrama-arquitectura.pdf).
+
 ```
 backend/     FastAPI: API de agregación, orquestador y agentes especializados
   app/       endpoints, agentes, herramientas y recuperación
